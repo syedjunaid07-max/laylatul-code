@@ -165,7 +165,7 @@ function makeScene() {
 function sizeCanvas() {
   const rc = canvas.getBoundingClientRect();
   if (!rc.width || !rc.height) return;
-  const dpr = LITE ? 0.7 : Math.min(1.25, devicePixelRatio || 1);
+  const dpr = LITE ? Math.min(1.2, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);
   night.W = rc.width; night.H = rc.height;
   canvas.width = Math.round(rc.width * dpr); canvas.height = Math.round(rc.height * dpr);
   night.ctx = canvas.getContext('2d');
@@ -736,7 +736,7 @@ const orb = { x: innerWidth * 0.72, y: innerHeight * 0.47, vx: 0, vy: 0, R: 40, 
   orb.arcs = [[0.92, 1.3, 0.35, 1], [1.06, 0.7, -0.5, 0.6], [1.22, 1.7, 0.22, 0.8], [0.8, 0.55, -0.7, 1.2]].map(([rr, span, w, k], i) => ({ rr, span, w, k, s: i * 1.7 }));
 })();
 function sizeOrb() {
-  const dpr = LITE ? 0.85 : Math.min(1.25, devicePixelRatio || 1);
+  const dpr = LITE ? Math.min(1.6, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);   // the orb is the star on phones: keep it crisp
   orb.W = innerWidth; orb.H = innerHeight;
   orbCv.width = Math.round(orb.W * dpr); orbCv.height = Math.round(orb.H * dpr);
   oc.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -747,12 +747,11 @@ sizeOrb();
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
   if (phoneOn && scrubOn && heroLive()) {
-    // the orb rides the page you are on, moves up with it, then swoops down to meet the next page
-    const H = orb.H, y0 = HM.top - scrollY;
-    let i = 0;
-    HM.pt.forEach((t, n) => { if (y0 + t <= H * 0.5) i = n; });
-    const last = i === HM.pt.length - 1;
-    return { x: orb.W / 2, y: y0 + (HM.pt[i] || 0) + H * 0.3, R: Math.min(orb.W * 0.26, H * 0.14) * (last ? 1 : 0.85), big: last ? 1 : 0.5, hero: true };
+    // phones: the orb floats near the top; mid-swipe it lifts and leans a little, then settles softly as the page lands
+    const H = orb.H, raw = shown * 3, lift = Math.sin(Math.PI * (raw - Math.floor(raw)));
+    const end = smoothstep(shown, 0.67, 1);
+    return { x: orb.W / 2 + Math.sin(raw * Math.PI) * orb.W * 0.05, y: stageBox().top + H * 0.3 - lift * H * 0.07,
+      R: Math.min(orb.W * 0.26, H * 0.14) * (0.85 + 0.15 * end) * (1 - 0.08 * lift), big: 0.5 + 0.5 * end, hero: true, soft: true };
   }
   if (heroLive()) {
     const sr = stageBox(), sw = sr.width, sh = sr.height, wide = sw / sh > 1.15;
@@ -766,12 +765,12 @@ function orbTarget() {
 
 function drawOrb(c, x, y, R, t, ex, big) {
   const r = R * (1 + 0.03 * Math.sin(t * 2.2) + 0.05 * ex);
-  const step = Math.max(LITE ? 3 : 1, R > 80 ? 1 : R > 40 ? 2 : R > 22 ? 3 : 5);      // fewer embers when small or on phones
+  const step = Math.max(LITE ? 2 : 1, R > 80 ? 1 : R > 40 ? 2 : R > 22 ? 3 : 5);      // fewer embers when small or on phones
   const unit = Math.max(0.6, r / 120), rot = orb.scrollRot;
   c.globalCompositeOperation = 'lighter';
 
   // soft solar glow
-  const gR = Math.min(r * 2.8, r * 1.6 + 160);
+  const gR = LITE ? r * 2 : Math.min(r * 2.8, r * 1.6 + 160);
   let g = c.createRadialGradient(x, y, 0, x, y, gR);
   g.addColorStop(0, `rgba(255,140,30,${0.26 + 0.12 * ex})`); g.addColorStop(0.45, 'rgba(255,90,10,0.08)'); g.addColorStop(1, 'rgba(255,80,10,0)');
   c.globalAlpha = 1; c.fillStyle = g; c.fillRect(x - gR, y - gR, gR * 2, gR * 2);
@@ -819,8 +818,7 @@ function drawOrb(c, x, y, R, t, ex, big) {
   c.strokeStyle = '#ff9d2e'; c.lineCap = 'round';
   for (const a of orb.arcs) {
     const a0 = a.s + t * a.w + rot * a.k;
-    c.globalAlpha = 0.25; c.lineWidth = Math.max(4, r * 0.09);
-    c.beginPath(); c.arc(x, y, r * a.rr, a0, a0 + a.span); c.stroke();
+    if (!LITE) { c.globalAlpha = 0.25; c.lineWidth = Math.max(4, r * 0.09); c.beginPath(); c.arc(x, y, r * a.rr, a0, a0 + a.span); c.stroke(); }
     c.globalAlpha = 0.9; c.lineWidth = Math.max(1.5, r * 0.035);
     c.beginPath(); c.arc(x, y, r * a.rr, a0, a0 + a.span); c.stroke();
   }
@@ -836,8 +834,8 @@ function drawOrb(c, x, y, R, t, ex, big) {
     const lg = c.createLinearGradient(x0, y0, x1, y1);
     lg.addColorStop(0, 'rgba(255,170,60,0.35)'); lg.addColorStop(b.through ? 0.45 : 0.08, 'rgba(255,190,90,1)'); lg.addColorStop(1, 'rgba(255,110,20,0)');
     c.strokeStyle = lg;
-    c.globalAlpha = 0.22; c.lineWidth = b.w * unit * 4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-    c.globalAlpha = 0.95; c.lineWidth = b.w * unit; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    if (!LITE) { c.globalAlpha = 0.22; c.lineWidth = b.w * unit * 4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+    c.globalAlpha = 0.95; c.lineWidth = b.w * unit * (LITE ? 1.5 : 1); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
   }
 
   // white-gold core
@@ -881,8 +879,9 @@ function stepOrb(now) {
   // alive: a gentle drift around its spot in the hero
   const tx = T.x + Math.sin(t * 0.7) * T.R * 0.1 + Math.sin(t * 1.9) * T.R * 0.03;
   const ty = T.y + Math.cos(t * 0.9) * T.R * 0.1;
-  orb.vx += (tx - orb.x) * 0.14 * k; orb.vy += (ty - orb.y) * 0.14 * k;
-  const damp = Math.pow(0.66, k);
+  const stiff = T.soft ? 0.05 : 0.14;   // phones: a softer, slower spring so it glides instead of darting
+  orb.vx += (tx - orb.x) * stiff * k; orb.vy += (ty - orb.y) * stiff * k;
+  const damp = Math.pow(T.soft ? 0.8 : 0.66, k);
   orb.vx *= damp; orb.vy *= damp;
   orb.x += orb.vx * k; orb.y += orb.vy * k;
   orb.R += (T.R - orb.R) * (1 - Math.pow(0.88, k));
@@ -1178,6 +1177,33 @@ FINE.addEventListener('change', applyCursor);
 addEventListener('resize', () => { if (cur.on) sizeCursor(); });
 document.addEventListener('visibilitychange', wakeCursor);
 applyCursor();
+
+/* ---------- Explore: a slow, cinematic glide down to "What we build" ---------- */
+let glide = null;
+function stopGlide() {
+  if (!glide) return;
+  cancelAnimationFrame(glide.raf); glide = null;
+  document.documentElement.classList.remove('gliding');
+  ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(ev => removeEventListener(ev, stopGlide));
+}
+function startGlide(el) {
+  stopGlide();
+  const to = el.getBoundingClientRect().top + scrollY, from = scrollY, dist = to - from;
+  if (RM.matches || Math.abs(dist) < 4) { scrollTo({ top: to, behavior: 'auto' }); return; }
+  const ms = clamp(Math.abs(dist) / (phoneOn ? 0.55 : 0.75), 3500, 15000);   // slow enough to watch the journey
+  const ease = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  document.documentElement.classList.add('gliding');   // snapping off while gliding
+  glide = { t0: performance.now(), raf: 0 };
+  const step = now => {
+    if (!glide) return;
+    const x = Math.min(1, (now - glide.t0) / ms);
+    scrollTo({ top: from + dist * ease(x), behavior: 'instant' });
+    if (x < 1) glide.raf = requestAnimationFrame(step); else stopGlide();
+  };
+  glide.raf = requestAnimationFrame(step);
+  setTimeout(() => ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(ev => addEventListener(ev, stopGlide, { passive: true })), 50);
+}
+$$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); startGlide($('#types')); }));
 
 /* ---------- go ---------- */
 if (RM.matches) pinToFinalStates();

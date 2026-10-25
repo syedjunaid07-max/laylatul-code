@@ -96,7 +96,7 @@ body.paused *,body.paused *::before,body.paused *::after{animation-play-state:pa
 .split .c{display:inline-block;will-change:transform,opacity}
 /* drift-down: words fall into place */
 .fx-drift .w{--kc:clamp(0,(var(--k,0) - var(--th,0))*2.8,1);opacity:var(--kc);transform:translateY(calc((1 - var(--kc))*-26px))}
-.fx-drift .sub,.fx-drift .kicker{opacity:clamp(0,(var(--k,0) - .45)*3,1);transform:translateY(calc((1 - clamp(0,(var(--k,0) - .45)*3,1))*-12px))}
+.fx-drift .sub,.fx-drift .kicker,.fx-drift .cta-row{opacity:clamp(0,(var(--k,0) - .45)*3,1);transform:translateY(calc((1 - clamp(0,(var(--k,0) - .45)*3,1))*-12px))}
 /* blur-to-sharp: mist clearing */
 .h-blur{position:relative;display:grid}
 .h-blur span{grid-area:1/1}
@@ -362,3 +362,8 @@ html.cursor-on input:not([type="range"]):not([type="radio"]):not([type="checkbox
 html.snap{scroll-snap-type:y mandatory}
 html.snap main > section,html.snap .foot{scroll-snap-align:start}
 @media (prefers-reduced-motion: reduce){.hero.phone .band{opacity:1;translate:none}}
+
+/* Explore: glides the page down through the journey */
+.btn-explore svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;animation:nudge 2.4s var(--ease-io) infinite}
+@keyframes nudge{50%{transform:translateY(4px)}}
+html.gliding,html.gliding body{scroll-snap-type:none!important}
