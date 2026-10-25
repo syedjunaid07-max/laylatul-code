@@ -1212,7 +1212,7 @@ function startGlide() {
     if (!glide) return;
     if (i >= stops.length) { stopGlide(); return; }
     const from = scrollY, to = stops[i], dist = to - from;
-    const ms = clamp(Math.abs(dist) / (phoneOn ? 0.28 : 0.36), 2800, 6000);
+    const ms = 2500;   // every move takes 2.5 seconds
     const t0 = performance.now();
     const step = now => {
       if (!glide) return;
