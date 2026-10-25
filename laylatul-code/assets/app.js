@@ -191,11 +191,11 @@ function boltPoints(x1, y1, x2, y2, rnd, disp) {
   }
   return pts;
 }
-function drawBolt(ctx, pts, glow, a) {
+function drawBolt(ctx, pts, glow, a, w = 1) {
   ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.globalAlpha = a * 0.3; ctx.lineWidth = 7; ctx.strokeStyle = glow; ctx.stroke();
-  ctx.globalAlpha = a; ctx.lineWidth = 1.5; ctx.strokeStyle = '#f2f9ff'; ctx.stroke();
+  ctx.globalAlpha = a * 0.3; ctx.lineWidth = 7 * w; ctx.strokeStyle = glow; ctx.stroke();
+  ctx.globalAlpha = a; ctx.lineWidth = 1.5 * w; ctx.strokeStyle = '#f2f9ff'; ctx.stroke();
 }
 
 function drawWorldExtras(ctx, w, wt, lp, t, vx, vy, F, trav) {
@@ -747,34 +747,43 @@ sizeOrb();
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
   const W = orb.W, H = orb.H, narrow = W < 720, hl = heroLive();
-  return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: Math.min(W, H) * (narrow ? 0.3 : 0.27), big: hl ? 1 : 0.6, hero: hl, soft: true };
+  return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.3 : 0.27) : 0, big: 1, hero: hl, soft: true };
 }
 const STORM_SECS = $$('main > section, .foot');
 // thunderstorm: as the next section rises into view, lightning from the orb grabs its edge and hauls it up
 function drawStorm(c, t) {
-  const W = orb.W, H = orb.H, pull = clamp(orb.svs * 1.3, 0, 1);
+  const W = orb.W, H = orb.H, pull = clamp(orb.svs * 1.4, 0, 1);
   for (const el of STORM_SECS) {
     const top = el.getBoundingClientRect().top, f = top / H;
-    const zone = smoothstep(f, 0.18, 0.4) * (1 - smoothstep(f, 0.9, 1.02));
+    const zone = smoothstep(f, 0.1, 0.28) * (1 - smoothstep(f, 0.92, 1.02));
     if (zone < 0.03) continue;
-    const I = zone * (0.3 + 0.7 * pull);
+    const I = zone * (0.22 + 0.78 * pull);
+    // the edge being hauled up: a bright seam with a blue glow band
     const seam = c.createLinearGradient(0, 0, W, 0);
-    seam.addColorStop(0, 'rgba(205,232,255,0)'); seam.addColorStop(0.5, `rgba(205,232,255,${0.75 * I})`); seam.addColorStop(1, 'rgba(205,232,255,0)');
-    c.globalAlpha = 1; c.fillStyle = seam; c.fillRect(0, top - 1, W, 2);
-    const glow = c.createLinearGradient(0, top - 40, 0, top + 40);
-    glow.addColorStop(0, 'rgba(205,232,255,0)'); glow.addColorStop(0.5, `rgba(220,226,235,${0.12 * I})`); glow.addColorStop(1, 'rgba(205,232,255,0)');
-    c.fillStyle = glow; c.fillRect(0, top - 40, W, 80);
-    const r = rng(Math.floor(t * 9) * 7919 + Math.round(top / 7));
-    const n = 1 + Math.round(I * 4);
+    seam.addColorStop(0, 'rgba(77,181,255,0)'); seam.addColorStop(0.5, `rgba(220,240,255,${Math.min(1, 1.1 * I)})`); seam.addColorStop(1, 'rgba(77,181,255,0)');
+    c.globalAlpha = 1; c.fillStyle = seam; c.fillRect(0, top - 1.5, W, 3);
+    const glow = c.createLinearGradient(0, top - 70, 0, top + 30);
+    glow.addColorStop(0, 'rgba(40,140,255,0)'); glow.addColorStop(0.7, `rgba(40,140,255,${0.28 * I})`); glow.addColorStop(1, 'rgba(40,140,255,0)');
+    c.fillStyle = glow; c.fillRect(0, top - 70, W, 100);
+    // lightning roots: from the sky down to the edge, forking as they go, with claws where they grip
+    const r = rng(Math.floor(t * 11) * 7919 + Math.round(top / 9));
+    const n = 2 + Math.round(I * 6);
     for (let i = 0; i < n; i++) {
-      const ex = W * (0.06 + r() * 0.88), dir = top > orb.y ? 1 : -1;
-      const sx = orb.x + (r() - 0.5) * orb.R * 0.8, sy = orb.y + dir * orb.R * 0.75;
-      const pts = boltPoints(sx, sy, ex, top, r, Math.hypot(ex - sx, top - sy) * 0.26);
-      drawBolt(c, pts, '#3da2ff', I * (0.45 + 0.55 * r()));
-      // little claws where the bolt grips the edge
-      for (let k = 0; k < 2; k++) { const kx = ex + (r() - 0.5) * 60; drawBolt(c, boltPoints(ex, top, kx, top + dir * -(6 + r() * 14), r, 10), '#7cc6ff', I * 0.6); }
+      const ex = W * (0.05 + r() * 0.9), sx = ex + (r() - 0.5) * W * 0.35, sy = -20;
+      const pts = boltPoints(sx, sy, ex, top, r, Math.hypot(ex - sx, top - sy) * 0.22);
+      const a = Math.min(1, I * (0.6 + 0.6 * r()));
+      drawBolt(c, pts, '#2f9bff', a, 1.3);
+      for (let b = 0; b < 3; b++) {   // forks
+        const p = pts[(4 + r() * (pts.length - 8)) | 0], len = 40 + r() * 110, ang = Math.PI * (0.25 + r() * 0.5);
+        drawBolt(c, boltPoints(p[0], p[1], p[0] + Math.cos(ang) * len * (r() < 0.5 ? -1 : 1), p[1] + Math.sin(ang) * len, r, len * 0.3), '#4db5ff', a * 0.7, 0.7);
+      }
+      for (let k = 0; k < 3; k++) {   // claws gripping the edge
+        const kx = ex + (r() - 0.5) * 90;
+        drawBolt(c, boltPoints(ex, top, kx, top - 4 - r() * 16, r, 12), '#7cc6ff', a * 0.8, 0.8);
+      }
+      c.globalAlpha = a; c.fillStyle = '#e8f5ff'; c.beginPath(); c.arc(ex, top, 2.5, 0, TAU); c.fill();   // spark at the grip
     }
-    if (pull > 0.25 && r() < 0.18) { c.globalAlpha = 0.05 * I; c.fillStyle = '#cde8ff'; c.fillRect(0, 0, W, H); }
+    if (pull > 0.3 && r() < 0.22) { c.globalAlpha = 0.07 * I; c.fillStyle = '#4db5ff'; c.fillRect(0, 0, W, H); }
   }
 }
 
@@ -870,7 +879,7 @@ function renderOrb(t) {
       oc.globalAlpha = a * 0.5 * Math.min(1, sp / 12); oc.fillRect(px - s / 2, py - s / 2, s, s);
     });
   }
-  drawOrb(oc, x, y, R, t, orb.excite, orb.big);
+  if (R > 1.5) drawOrb(oc, x, y, R, t, orb.excite, orb.big);
   drawStorm(oc, t);
   // sparks shed by the flares, falling as you scroll down
   oc.strokeStyle = '#cde8ff'; oc.lineCap = 'round';
@@ -897,7 +906,7 @@ function stepOrb(now) {
   // alive: a gentle drift, and it lags against the scroll so you can feel the page moving past it
   const tx = T.x + Math.sin(t * 0.7) * T.R * 0.06 + Math.sin(t * 1.9) * T.R * 0.02;
   const ty = T.y + Math.cos(t * 0.9) * T.R * 0.06 - clamp(orb.svs * 70, -T.R * 0.5, T.R * 0.5);
-  const op = T.hero ? 1 : 0.3;   // a soft backdrop behind section text
+  const op = 1;   // full strength: the orb itself shrinks away after the hero, the storm stays bright
   orb.op = (orb.op ?? op) + (op - (orb.op ?? op)) * (1 - Math.pow(0.9, k));
   const opS = orb.op.toFixed(2); if (opS !== orb.opS) { orb.opS = opS; orbCv.style.opacity = opS; }
   const stiff = T.soft ? 0.05 : 0.14;   // phones: a softer, slower spring so it glides instead of darting
@@ -911,7 +920,7 @@ function stepOrb(now) {
   orb.trail.push([orb.x, orb.y]); if (orb.trail.length > 18) orb.trail.shift();
   const sy = scrollY, sv = (sy - orb.lastSY) / Math.max(dt, 1); orb.lastSY = sy;
   orb.scrollRot += (sy * 0.0016 - orb.scrollRot) * (1 - Math.pow(0.85, k));
-  if (sv > 0.05 && orb.sparks.length < 180) {
+  if (orb.R > 6 && sv > 0.05 && orb.sparks.length < 180) {
     const n = Math.min(7, Math.ceil(sv * 3) * (orb.R > 40 ? 2 : 1));
     for (let i = 0; i < n; i++) {
       const ang = Math.PI * (0.12 + Math.random() * 0.76), sp = 1 + Math.random() * 2.2;
@@ -927,7 +936,7 @@ function stepOrb(now) {
 function orbStill() {   // reduced motion: the orb sits still at its spot, redrawn only when the page moves
   const T = orbTarget();
   Object.assign(orb, { x: T.x, y: T.y, R: T.R, big: T.big, vx: 0, vy: 0, excite: 0, svs: 0, spin: 0, scrollRot: scrollY * 0.0016, sparks: [] });
-  orbCv.style.opacity = T.hero ? 1 : 0.3;
+  orbCv.style.opacity = 1;
   renderOrb(1.2);
 }
 function wakeOrb() {
