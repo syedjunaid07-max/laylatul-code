@@ -1,0 +1,23 @@
+# The website skill used to build this (third-party, stays local)
+skill-src/
+*.zip
+
+# Reference screenshots and personal images
+*.jpeg
+*.jpg
+!laylatul-code/assets/**/*.jpg
+
+# Raw and review media never ship
+review/
+raw/
+*.mov
+
+# Local Claude settings stay personal; the preview config is shared
+.claude/*
+!.claude/launch.json
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+node_modules/

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "laylatul-code",
+      "runtimeExecutable": "npx.cmd",
+      "runtimeArgs": ["-y", "http-server", "laylatul-code", "-p", "8080", "-c-1"],
+      "port": 8080
+    }
+  ]
+}
