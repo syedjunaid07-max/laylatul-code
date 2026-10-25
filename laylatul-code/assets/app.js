@@ -591,7 +591,7 @@ function sectionDrive() {
   if (document.body.classList.contains('pinned')) return;
   const vh = innerHeight;
   const pr = problem.getBoundingClientRect();
-  const q = clamp((vh * 0.8 - pr.top) / (pr.height * 0.85), 0, 1);
+  const q = clamp((vh * 0.85 - pr.top) / (Math.min(pr.height, vh) * 0.75), 0, 1);   // finishes while the whole section is on screen
   quotes.forEach((li, i) => setVar(li, '--d', clamp((q - 0.12 - i * 0.12) / 0.14, 0, 1)));
   setVar(notHere, '--n', clamp((q - 0.78) / 0.14, 0, 1));
   const hr = how.getBoundingClientRect();
@@ -1178,32 +1178,55 @@ addEventListener('resize', () => { if (cur.on) sizeCursor(); });
 document.addEventListener('visibilitychange', wakeCursor);
 applyCursor();
 
-/* ---------- Explore: a slow, cinematic glide down to "What we build" ---------- */
+/* ---------- Explore: plays the page like a video, gliding scene to scene with a pause at each ---------- */
+const GLIDE_STOPS_EV = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
 let glide = null;
 function stopGlide() {
   if (!glide) return;
-  cancelAnimationFrame(glide.raf); glide = null;
+  cancelAnimationFrame(glide.raf); clearTimeout(glide.wait); glide = null;
   document.documentElement.classList.remove('gliding');
-  ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(ev => removeEventListener(ev, stopGlide));
+  GLIDE_STOPS_EV.forEach(ev => removeEventListener(ev, stopGlide));
 }
-function startGlide(el) {
+function sceneStops() {
+  const docTop = el => el.getBoundingClientRect().top + scrollY;
+  const range = HM.h - innerHeight, stops = [];
+  if (phoneOn && scrubOn) HM.pt.slice(1).forEach(t => stops.push(HM.top + t));            // each hero page
+  else if (scrubOn) [0.40, 0.70, 0.97].forEach(p => stops.push(HM.top + p * range));       // each caption, clear of portal flashes
+  const pr = $('#problem');                                                                 // strike-throughs finished
+  stops.push(phoneOn ? docTop(pr) : docTop(pr) - 70);
+  const prEnd = docTop(pr) + pr.offsetHeight - innerHeight + 30;                          // then "Not here." if it sits below the fold
+  if (prEnd > stops[stops.length - 1] + 120) stops.push(prEnd);
+  stops.push(docTop($('#promises')));
+  stops.push(docTop($('#types')));                                                          // the last stop: What we build
+  return stops.filter(y => y > scrollY + 8);
+}
+function startGlide() {
   stopGlide();
-  const to = el.getBoundingClientRect().top + scrollY, from = scrollY, dist = to - from;
-  if (RM.matches || Math.abs(dist) < 4) { scrollTo({ top: to, behavior: 'auto' }); return; }
-  const ms = clamp(Math.abs(dist) / (phoneOn ? 0.55 : 0.75), 3500, 15000);   // slow enough to watch the journey
-  const ease = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-  document.documentElement.classList.add('gliding');   // snapping off while gliding
-  glide = { t0: performance.now(), raf: 0 };
-  const step = now => {
+  const stops = sceneStops();
+  if (!stops.length) return;
+  if (RM.matches) { scrollTo({ top: stops[stops.length - 1], behavior: 'auto' }); return; }
+  document.documentElement.classList.add('gliding');   // snapping off while it plays
+  glide = { raf: 0, wait: 0 };
+  const ease = x => 0.5 - 0.5 * Math.cos(Math.PI * x);   // gentle start, gentle stop
+  const leg = i => {
     if (!glide) return;
-    const x = Math.min(1, (now - glide.t0) / ms);
-    scrollTo({ top: from + dist * ease(x), behavior: 'instant' });
-    if (x < 1) glide.raf = requestAnimationFrame(step); else stopGlide();
+    if (i >= stops.length) { stopGlide(); return; }
+    const from = scrollY, to = stops[i], dist = to - from;
+    const ms = clamp(Math.abs(dist) / (phoneOn ? 0.28 : 0.36), 2800, 6000);
+    const t0 = performance.now();
+    const step = now => {
+      if (!glide) return;
+      const x = Math.min(1, (now - t0) / ms);
+      scrollTo({ top: from + dist * ease(x), behavior: 'instant' });
+      if (x < 1) glide.raf = requestAnimationFrame(step);
+      else glide.wait = setTimeout(() => leg(i + 1), i === stops.length - 1 ? 0 : 2500);   // hold the scene, then move on
+    };
+    glide.raf = requestAnimationFrame(step);
   };
-  glide.raf = requestAnimationFrame(step);
-  setTimeout(() => ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(ev => addEventListener(ev, stopGlide, { passive: true })), 50);
+  leg(0);
+  setTimeout(() => GLIDE_STOPS_EV.forEach(ev => addEventListener(ev, stopGlide, { passive: true })), 50);
 }
-$$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); startGlide($('#types')); }));
+$$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); startGlide(); }));
 
 /* ---------- go ---------- */
 if (RM.matches) pinToFinalStates();
