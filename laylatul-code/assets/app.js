@@ -136,7 +136,7 @@ function makeScene() {
     night.parts.push({ ring, ux: Math.cos(th) * rr, uy: yy, uz: Math.sin(th) * rr, th: r() * TAU, rr: 1.08 + r() * 0.16,
       ang: r() * TAU, rad: 0.35 + r() * 0.9, ph: r() * TAU, sz: 0.9 + r() * 1.5, delay: r() * 0.04 });
   }
-  const NS = clamp(Math.round(W * H / 1600), 320, 850);
+  const NS = clamp(Math.round(W * H / 1600), 170, 850);   // same density on small screens
   night.stars = Array.from({ length: NS }, () => ({ th: r() * TAU, rho: 0.22 + Math.pow(r(), 0.7) * 2.8, z0: r() * DEPTH, s: 0.6 + r() * 1.4, ph: r() * TAU }));
   night.clouds = [];
   WORLDS.forEach((w, wi) => {
@@ -462,6 +462,7 @@ function updateHud(p, now) {
   hudIdx = i; hudAt = now; hudN.textContent = HUD[i][0]; hudT.textContent = HUD[i][1];
 }
 let prevShown = 0;
+const perf = { n: 0, sum: 0 };
 let target = 0, shown = 0, rafId = null, lastTick = 0, lastDraw = 0, heroOnScreen = true, scrubOn = false, scrolledFlag = null;
 
 function tick(now) {
@@ -471,6 +472,10 @@ function tick(now) {
   const moving = Math.abs(target - shown) >= 0.0005;
   if (!moving) shown = target;
   if (loadK < 1) loadK = Math.min(1, loadK + dt / 1400);
+  if (!slowPhone && perf.n < 120 && innerWidth <= 1024 && dt > 0) {
+    perf.n++; perf.sum += dt;
+    if (perf.n === 120 && perf.sum / perf.n > 55) { slowPhone = true; applyHeroMode(); return; }
+  }
   if (videoReady) requestSeek(shown * video.duration);
   updateCaptions(shown);
   const v = Math.abs(shown - prevShown) / Math.max(dt, 1) * 1000; prevShown = shown;
@@ -493,9 +498,6 @@ new IntersectionObserver(es => { heroOnScreen = es[0].isIntersecting; if (heroOn
 
 /* ---------- static-hero gates (identical strings to the CSS) ---------- */
 const GATES = [
-  '(max-width: 720px)',
-  '(orientation: portrait) and (max-width: 1024px)',
-  '(orientation: portrait) and (pointer: coarse)',
   '(orientation: landscape) and (pointer: coarse) and (max-height: 560px)',
   '(prefers-reduced-motion: reduce)'
 ];
@@ -516,7 +518,11 @@ function disableScrub() {
   if (scrubOn) { scrubOn = false; removeEventListener('scroll', onScroll); if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } }
   drawStatic();
 }
-function applyHeroMode() { if (MQLS.some(m => m.matches)) disableScrub(); else enableScrub(); }
+let slowPhone = false;   // set once if a phone cannot keep up with the journey
+function applyHeroMode() {
+  document.documentElement.classList.toggle('hero-static', slowPhone);
+  if (slowPhone || MQLS.some(m => m.matches)) disableScrub(); else enableScrub();
+}
 MQLS.forEach(m => m.addEventListener('change', applyHeroMode));
 
 /* ---------- reduced motion, live in both directions ---------- */
@@ -566,7 +572,13 @@ $$('main section').forEach(s => liveIO.observe(s));
 document.addEventListener('visibilitychange', () => { document.body.classList.toggle('paused', document.hidden); if (!document.hidden) kick(); });
 
 let rz;
-addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (scrubOn) { sizeCanvas(); onScroll(); } else drawStatic(); sectionDrive(); }, 150); });
+let lastW = innerWidth, lastH = innerHeight;
+addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
+  const big = innerWidth !== lastW || Math.abs(innerHeight - lastH) > 140;   // phone URL bars only nudge the height
+  lastW = innerWidth; lastH = innerHeight;
+  if (scrubOn) { if (big) sizeCanvas(); onScroll(); } else drawStatic();
+  sectionDrive();
+}, 150); });
 
 /* ---------- request builder ---------- */
 const form = $('#bform'), err = $('#err'), done = $('#done'), doneMsg = $('#done-msg');
