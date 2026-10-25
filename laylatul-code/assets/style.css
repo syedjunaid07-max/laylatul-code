@@ -351,3 +351,14 @@ html.cursor-on input:not([type="range"]):not([type="radio"]):not([type="checkbox
   .h-blur .soft{display:none}   /* the blurred copy is costly on phones; a plain fade reads the same */
   .h-blur .sharp{transform:translateY(calc((1 - var(--k,0))*10px))}
 }
+
+/* phones: the hero is four full-screen pages over the pinned journey, and the page snaps page by page */
+.hero.phone{height:auto}
+.hero.phone .stage{margin-bottom:-100vh;margin-bottom:-100svh;z-index:0}
+.hero.phone .cue{display:none}
+.hero.phone .panel{position:relative;z-index:1;height:100vh;height:100svh;display:flex;align-items:flex-end;padding:0 16px max(84px,11svh);scroll-snap-align:start;scroll-snap-stop:always}
+.hero.phone .band{position:relative;inset:auto;width:100%;transform:none;opacity:0;translate:0 26px;transition:opacity .7s var(--ease-out),translate .7s var(--ease-out)}
+.hero.phone .panel.in .band{opacity:1;translate:0 0}
+html.snap{scroll-snap-type:y mandatory}
+html.snap main > section,html.snap .foot{scroll-snap-align:start}
+@media (prefers-reduced-motion: reduce){.hero.phone .band{opacity:1;translate:none}}

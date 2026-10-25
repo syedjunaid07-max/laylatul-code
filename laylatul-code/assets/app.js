@@ -57,6 +57,7 @@ const bands = $$('.band').map((el, i, all) => {
 let loadK = 0;   // band one's one-time load ramp
 
 function updateCaptions(p) {
+  if (phoneOn) return;   // on phones the captions live in their own pages and scroll natively
   for (const b of bands) {
     const f = Math.min(0.03, (b.b - b.a) / 3);
     let op;
@@ -74,8 +75,9 @@ function updateCaptions(p) {
 }
 
 // the hero's size and position, measured once and on resize, so nothing re-measures layout every frame
-const HM = { top: 0, h: 0, sh: 0, sw: 0 };
-function measureHero() { HM.top = hero.offsetTop; HM.h = hero.offsetHeight; HM.sh = stage.offsetHeight; HM.sw = stage.offsetWidth; }
+const HM = { top: 0, h: 0, sh: 0, sw: 0, pt: [] };
+const panels = [];   // phone pages (filled by setPhoneLayout)
+function measureHero() { HM.top = hero.offsetTop; HM.h = hero.offsetHeight; HM.sh = stage.offsetHeight; HM.sw = stage.offsetWidth; HM.pt = panels.map(p => p.offsetTop); }
 measureHero();
 function heroBox() { const top = HM.top - scrollY; return { top, bottom: top + HM.h }; }
 function stageBox() {
@@ -492,10 +494,10 @@ function tick(now) {
   updateCaptions(shown);
   const v = Math.abs(shown - prevShown) / Math.max(dt, 1) * 1000; prevShown = shown;
   night.vel += (v - night.vel) * 0.2;
-  updateHud(shown, now);
+  updateHud(jp(shown), now);
   const ambient = !videoReady && heroOnScreen && !document.hidden;
   const idleGap = LITE ? 32 : transitAt(shown) > 0.05 ? 0 : 33;
-  if (!videoReady && ((moving && !LITE) || now - lastDraw >= idleGap)) { drawNight(shown, now / 1000); lastDraw = now; }
+  if (!videoReady && ((moving && !LITE) || now - lastDraw >= idleGap)) { drawNight(jp(shown), now / 1000); lastDraw = now; }
   if (scrubOn && heroOnScreen && (moving || loadK < 1 || ambient)) rafId = requestAnimationFrame(tick);
   else lastTick = 0;
 }
@@ -534,11 +536,41 @@ let slowPhone = false;   // set once if a phone cannot keep up with the journey
 function applyHeroMode() {
   document.documentElement.classList.toggle('hero-static', slowPhone);
   const still = slowPhone || MQLS.some(m => m.matches);
+  setPhoneLayout(PHONE.matches && !still);
   measureHero();   // the hero changes height between modes
   if (still) disableScrub(); else enableScrub();
   measureHero();
 }
 MQLS.forEach(m => m.addEventListener('change', applyHeroMode));
+
+/* ---------- phones: the hero becomes four full-screen pages that snap; captions scroll with the finger ---------- */
+const PHONE = matchMedia('(max-width: 720px)');
+let phoneOn = false, panelIO = null;
+const PHONE_RESTS = [0, 0.42, 0.74, 1];   // where each page lands in the journey: calm moments between portals
+function jp(p) {   // page progress -> journey progress
+  if (!phoneOn) return p;
+  const seg = Math.min(2, Math.floor(p * 3)), f = p * 3 - seg;
+  return PHONE_RESTS[seg] + (PHONE_RESTS[seg + 1] - PHONE_RESTS[seg]) * f;
+}
+function setPhoneLayout(on) {
+  if (on === phoneOn) return;
+  phoneOn = on;
+  hero.classList.toggle('phone', on);
+  document.documentElement.classList.toggle('snap', on);
+  if (on) {
+    panelIO = panelIO || new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('in', e.isIntersecting)), { threshold: 0.35 });
+    bands.forEach(b => {
+      const pn = document.createElement('div'); pn.className = 'panel';
+      pn.appendChild(b.el); hero.appendChild(pn); panels.push(pn); panelIO.observe(pn);
+      b.el.style.opacity = ''; b.el.style.setProperty('--k', '1'); b.el.classList.add('live');
+    });
+  } else {
+    const anchor = stage.querySelector('.static-copy');
+    bands.forEach(b => { anchor.before(b.el); b.op = -1; b.k = -1; });
+    panels.forEach(p => { panelIO.unobserve(p); p.remove(); }); panels.length = 0;
+  }
+}
+PHONE.addEventListener('change', applyHeroMode);
 
 /* ---------- reduced motion, live in both directions ---------- */
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
@@ -714,6 +746,14 @@ sizeOrb();
 // the orb belongs to the hero: it lives inside the journey and shrinks away once you scroll past it
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
+  if (phoneOn && scrubOn && heroLive()) {
+    // the orb rides the page you are on, moves up with it, then swoops down to meet the next page
+    const H = orb.H, y0 = HM.top - scrollY;
+    let i = 0;
+    HM.pt.forEach((t, n) => { if (y0 + t <= H * 0.5) i = n; });
+    const last = i === HM.pt.length - 1;
+    return { x: orb.W / 2, y: y0 + (HM.pt[i] || 0) + H * 0.3, R: Math.min(orb.W * 0.26, H * 0.14) * (last ? 1 : 0.85), big: last ? 1 : 0.5, hero: true };
+  }
   if (heroLive()) {
     const sr = stageBox(), sw = sr.width, sh = sr.height, wide = sw / sh > 1.15;
     const Rbig = wide ? Math.min(sw * 0.12, sh * 0.23) : Math.min(sw * 0.24, sh * 0.13);
