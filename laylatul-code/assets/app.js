@@ -73,16 +73,27 @@ function updateCaptions(p) {
   }
 }
 
+// the hero's size and position, measured once and on resize, so nothing re-measures layout every frame
+const HM = { top: 0, h: 0, sh: 0, sw: 0 };
+function measureHero() { HM.top = hero.offsetTop; HM.h = hero.offsetHeight; HM.sh = stage.offsetHeight; HM.sw = stage.offsetWidth; }
+measureHero();
+function heroBox() { const top = HM.top - scrollY; return { top, bottom: top + HM.h }; }
+function stageBox() {
+  const top = scrubOn ? Math.min(0, HM.top + HM.h - HM.sh - scrollY) : HM.top - scrollY;
+  return { left: 0, top, width: HM.sw, height: HM.sh };
+}
 function heroProgress() {
-  const range = hero.offsetHeight - innerHeight;
+  const range = HM.h - innerHeight;
   if (range <= 0) return 1;
-  return clamp(-hero.getBoundingClientRect().top / range, 0, 1);
+  return clamp((scrollY - HM.top) / range, 0, 1);
 }
 
 /* ---------- the Multiverse journey canvas (code-drawn hero, and the fallback when no video) ---------- */
 // Scroll down = fly forward: launch through a light bridge, pass portals into four universes
 // (one per kind of website), then exit and watch the website gather from light.
 const TAU = Math.PI * 2;
+// phones and touch tablets: same look, drawn lighter (lower canvas resolution, fewer extras, 30 fps canvases)
+const LITE = matchMedia('(pointer: coarse)').matches || innerWidth <= 820;
 const PORTALS = [0.18, 0.34, 0.50, 0.66, 0.82];
 const WORLDS = [
   { a: 0.18, b: 0.34, kind: 'ember',  c0: [62, 16, 6],  c1: [10, 4, 3],  h1: [255, 128, 48],  h2: [255, 70, 30] },
@@ -94,6 +105,7 @@ const HUD = [['00', 'Ready for launch'], ['01', 'Online stores'], ['02', 'Restau
 const DEPTH = 10, CDEPTH = 9;
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
+const STAR_PAL = [0, 1, 2, 3, 4].map(ti => { const tr = ti / 4; return [0, 1, 2, 3, 4, 5, 6, 7].map(hi => `hsl(${Math.round(12 + hi * 36 / 7)},${Math.round(40 + 55 * tr)}%,${Math.round(80 - 18 * tr)}%)`); });
 function transitAt(p) { return smoothstep(p, 0.10, 0.18) * (1 - smoothstep(p, 0.80, 0.87)); }
 const TRAVEL = (() => {
   const n = 1000, arr = new Float32Array(n + 1); let acc = 0;
@@ -140,7 +152,7 @@ function makeScene() {
   night.stars = Array.from({ length: NS }, () => ({ th: r() * TAU, rho: 0.22 + Math.pow(r(), 0.7) * 2.8, z0: r() * DEPTH, s: 0.6 + r() * 1.4, ph: r() * TAU }));
   night.clouds = [];
   WORLDS.forEach((w, wi) => {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < (LITE ? 3 : 6); i++) {
       let x = (r() - 0.5) * 7, y = (r() - 0.5) * 4.4;
       if (Math.abs(x) < 0.9 && Math.abs(y) < 0.7) x += x < 0 ? -1.2 : 1.2;
       night.clouds.push({ wi, x, y, z0: r() * CDEPTH, s: 1.4 + r() * 2.4, spr: i % 2 });
@@ -151,7 +163,7 @@ function makeScene() {
 function sizeCanvas() {
   const rc = canvas.getBoundingClientRect();
   if (!rc.width || !rc.height) return;
-  const dpr = Math.min(1.25, devicePixelRatio || 1);
+  const dpr = LITE ? 0.7 : Math.min(1.25, devicePixelRatio || 1);
   night.W = rc.width; night.H = rc.height;
   canvas.width = Math.round(rc.width * dpr); canvas.height = Math.round(rc.height * dpr);
   night.ctx = canvas.getContext('2d');
@@ -307,7 +319,7 @@ function drawNight(p, t) {
     ctx.globalAlpha = wts[i]; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   });
   // 2. the light-bridge rainbow around the edges while travelling
-  if (tr > 0.01 && ctx.createConicGradient) {
+  if (!LITE && tr > 0.01 && ctx.createConicGradient) {
     const cg = ctx.createConicGradient(t * 0.15, vx, vy);
     ['#ff4d1f', '#ff8a1f', '#ffc24a', '#fff1c8', '#ffc24a', '#ff8a1f', '#ff4d1f', '#ff4d1f'].forEach((c, i, arr) => cg.addColorStop(i / (arr.length - 1), c));
     ctx.globalAlpha = 0.11 * tr; ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
@@ -344,9 +356,9 @@ function drawNight(p, t) {
     if (hx < -40 || hx > W + 40 || hy < -40 || hy > H + 40) continue;
     const z2 = zr + len, tx = vx + x / z2 * F, ty = vy + y / z2 * F;
     const a = clamp((DEPTH - zr) / 3, 0, 1) * (0.55 + 0.45 * Math.sin(t * 1.7 + s.ph)) * (1 - 0.5 * settle);
-    const hue = 30 + 18 * Math.sin(s.th * 3 + t * 0.5);
+    const hi = Math.round((Math.sin(s.th * 3 + t * 0.5) + 1) * 3.5);
     ctx.globalAlpha = a;
-    ctx.strokeStyle = tr > 0.02 ? `hsl(${hue},${Math.round(40 + 55 * tr)}%,${Math.round(80 - 18 * tr)}%)` : '#ffd8b0';
+    ctx.strokeStyle = tr > 0.02 ? STAR_PAL[Math.round(tr * 4)][hi] : '#ffd8b0';
     ctx.lineWidth = clamp(s.s * 1.3 / zr, 0.5, 3.4);
     ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx + 0.01, hy); ctx.stroke();
   }
@@ -474,7 +486,7 @@ function tick(now) {
   if (loadK < 1) loadK = Math.min(1, loadK + dt / 1400);
   if (!slowPhone && perf.n < 120 && innerWidth <= 1024 && dt > 0) {
     perf.n++; perf.sum += dt;
-    if (perf.n === 120 && perf.sum / perf.n > 55) { slowPhone = true; applyHeroMode(); return; }
+    if (perf.n === 120 && perf.sum / perf.n > 40) { slowPhone = true; applyHeroMode(); return; }
   }
   if (videoReady) requestSeek(shown * video.duration);
   updateCaptions(shown);
@@ -482,8 +494,8 @@ function tick(now) {
   night.vel += (v - night.vel) * 0.2;
   updateHud(shown, now);
   const ambient = !videoReady && heroOnScreen && !document.hidden;
-  const idleGap = transitAt(shown) > 0.05 ? 0 : 33;
-  if (!videoReady && (moving || now - lastDraw >= idleGap)) { drawNight(shown, now / 1000); lastDraw = now; }
+  const idleGap = LITE ? 32 : transitAt(shown) > 0.05 ? 0 : 33;
+  if (!videoReady && ((moving && !LITE) || now - lastDraw >= idleGap)) { drawNight(shown, now / 1000); lastDraw = now; }
   if (scrubOn && heroOnScreen && (moving || loadK < 1 || ambient)) rafId = requestAnimationFrame(tick);
   else lastTick = 0;
 }
@@ -521,7 +533,10 @@ function disableScrub() {
 let slowPhone = false;   // set once if a phone cannot keep up with the journey
 function applyHeroMode() {
   document.documentElement.classList.toggle('hero-static', slowPhone);
-  if (slowPhone || MQLS.some(m => m.matches)) disableScrub(); else enableScrub();
+  const still = slowPhone || MQLS.some(m => m.matches);
+  measureHero();   // the hero changes height between modes
+  if (still) disableScrub(); else enableScrub();
+  measureHero();
 }
 MQLS.forEach(m => m.addEventListener('change', applyHeroMode));
 
@@ -576,6 +591,7 @@ let lastW = innerWidth, lastH = innerHeight;
 addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
   const big = innerWidth !== lastW || Math.abs(innerHeight - lastH) > 140;   // phone URL bars only nudge the height
   lastW = innerWidth; lastH = innerHeight;
+  measureHero();
   if (scrubOn) { if (big) sizeCanvas(); onScroll(); } else drawStatic();
   sectionDrive();
 }, 150); });
@@ -688,7 +704,7 @@ const orb = { x: innerWidth * 0.72, y: innerHeight * 0.47, vx: 0, vy: 0, R: 40, 
   orb.arcs = [[0.92, 1.3, 0.35, 1], [1.06, 0.7, -0.5, 0.6], [1.22, 1.7, 0.22, 0.8], [0.8, 0.55, -0.7, 1.2]].map(([rr, span, w, k], i) => ({ rr, span, w, k, s: i * 1.7 }));
 })();
 function sizeOrb() {
-  const dpr = Math.min(1.25, devicePixelRatio || 1);
+  const dpr = LITE ? 0.85 : Math.min(1.25, devicePixelRatio || 1);
   orb.W = innerWidth; orb.H = innerHeight;
   orbCv.width = Math.round(orb.W * dpr); orbCv.height = Math.round(orb.H * dpr);
   oc.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -696,10 +712,10 @@ function sizeOrb() {
 sizeOrb();
 
 // the orb belongs to the hero: it lives inside the journey and shrinks away once you scroll past it
-function heroLive() { return hero.getBoundingClientRect().bottom > orb.H * 0.55; }
+function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
   if (heroLive()) {
-    const sr = stage.getBoundingClientRect(), sw = sr.width, sh = sr.height, wide = sw / sh > 1.15;
+    const sr = stageBox(), sw = sr.width, sh = sr.height, wide = sw / sh > 1.15;
     const Rbig = wide ? Math.min(sw * 0.12, sh * 0.23) : Math.min(sw * 0.24, sh * 0.13);
     const p = scrubOn ? shown : 1;
     const f = 0.62 - 0.24 * smoothstep(p, 0.08, 0.18) + 0.42 * smoothstep(p, 0.82, 0.95);
@@ -710,7 +726,7 @@ function orbTarget() {
 
 function drawOrb(c, x, y, R, t, ex, big) {
   const r = R * (1 + 0.03 * Math.sin(t * 2.2) + 0.05 * ex);
-  const step = R > 80 ? 1 : R > 40 ? 2 : R > 22 ? 3 : 5;      // fewer embers when it is small
+  const step = Math.max(LITE ? 3 : 1, R > 80 ? 1 : R > 40 ? 2 : R > 22 ? 3 : 5);      // fewer embers when small or on phones
   const unit = Math.max(0.6, r / 120), rot = orb.scrollRot;
   c.globalCompositeOperation = 'lighter';
 
@@ -845,7 +861,7 @@ function stepOrb(now) {
   }
   for (const s of orb.sparks) { s.x += s.vx * k; s.y += s.vy * k; s.vy += 0.09 * k; s.vx *= Math.pow(0.99, k); s.life -= 0.022 * k; }
   orb.sparks = orb.sparks.filter(s => s.life > 0 && s.y < orb.H + 20);
-  renderOrb(t);
+  if (!LITE || now - (orb.lastDraw || 0) >= 32) { renderOrb(t); orb.lastDraw = now; }
   if (!document.hidden && !RM.matches) orb.raf = requestAnimationFrame(stepOrb);
 }
 function orbStill() {   // reduced motion: the orb sits still at its spot, redrawn only when the page moves
@@ -984,10 +1000,11 @@ function stepTech(now) {
   const dt = Math.min(50, now - (tech.last || now)); tech.last = now;
   const k = dt / 16.667, sy = scrollY, sv = (sy - tech.lastSY) / Math.max(dt, 1); tech.lastSY = sy;
   tech.boost += (clamp(sv * 1.6, 0, 5) - tech.boost) * (1 - Math.pow(0.9, k));
-  const inHero = hero.getBoundingClientRect().bottom > innerHeight * 0.4;
+  const inHero = heroBox().bottom > innerHeight * 0.4;
   tech.mix += ((inHero ? 0.45 : 1) - tech.mix) * (1 - Math.pow(0.92, k));
   tech.frame = (tech.frame || 0) + 1;
-  if (!inHero || tech.frame % 2 === 0) drawTech(now / 1000, inHero ? k * 2 : k);   // half rate behind the hero journey
+  if (LITE && inHero) { if (!tech.cleared) { tc.clearRect(0, 0, tech.W, tech.H); tech.cleared = true; } }
+  else if ((!LITE && !inHero) || tech.frame % 2 === 0) { tech.cleared = false; drawTech(now / 1000, k * (LITE || inHero ? 2 : 1)); }   // half rate on phones and behind the hero
   if (!document.hidden && !RM.matches) tech.raf = requestAnimationFrame(stepTech);
 }
 function wakeTech() {
