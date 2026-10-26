@@ -16,14 +16,16 @@ The site is plain HTML, CSS and JavaScript. There is no framework, no build step
 
 ### Map of `app.js`
 
-1. **Settings** at the very top: WhatsApp number and email
-2. **Section animations**: strike-throughs, timeline line, reveals, nav state
-3. **Request builder**: the live blueprint sketch, and sending to WhatsApp or email
-4. **Hero**: fades in the burning-ring video over the still image (`assets/ring-plate.jpg`, `assets/ring-loop.mp4`), the entrance animation, and the phone burger menu. The ring itself is never drawn in code
-5. **Storm**: lightning that hauls each section up as you scroll
-6. **Tech layer**: data rain, code characters, network and atoms behind the sections
-7. **Custom cursor**: glowing core, ring and sparks (mouse devices only)
-8. **The tour**: the "Take the tour" button glides scene by scene to "What we build"
+1. **Settings** at the very top: WhatsApp number, email, AI video switch
+2. **Hero captions** that fade in and out as you scroll
+3. **Multiverse journey** (`drawNight`): portals, four universes, light streaks, lightning, drawn on a canvas
+4. **Optional scroll video** loader, switched off until a video exists (`HAS_VIDEO`)
+5. **Static hero rules** for reduced motion, short landscape phones, and phones too slow for the journey (`slowPhone`). The `GATES` list must match the CSS media query exactly
+6. **Section animations**: strike-throughs, timeline line, reveals
+7. **Request builder**: the live blueprint sketch, and sending to WhatsApp or email
+8. **Solar orb** (`drawOrb`): the golden orb at the end of the hero
+9. **Tech layer**: data rain, code characters, network, atoms across the page
+10. **Custom cursor**: glowing core, ring and sparks (mouse devices only)
 
 ## Run it locally
 
@@ -52,7 +54,7 @@ Then open http://localhost:8080 in Chrome. Double-clicking `index.html` also wor
 
 ### House rules for the code and copy
 
-- Animate only `transform` and `opacity` in CSS, so things stay smooth. The font is Anta everywhere (one weight, 400).
+- Animate only `transform` and `opacity` in CSS, so things stay smooth.
 - Every animation must respect `prefers-reduced-motion` (there are examples throughout).
 - Site copy: no em dashes, and none of these words: leverage, seamless, empower, unlock, robust, actionable, data-driven, solutions. Write plainly.
 - Test on a phone width (375px) as well as desktop before opening a pull request.
