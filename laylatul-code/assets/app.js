@@ -747,7 +747,8 @@ sizeOrb();
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
   const W = orb.W, H = orb.H, narrow = W < 720, hl = heroLive();
-  return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.3 : 0.27) : 0, big: 1, hero: hl, soft: true };
+  // the orb has been replaced by the 3D robot (assets/robot.js); this layer now only carries the section storm
+  return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: 0, big: 1, hero: hl, soft: true };
 }
 const STORM_SECS = $$('main > section, .foot');
 // thunderstorm: as the next section rises into view, lightning from the orb grabs its edge and hauls it up
