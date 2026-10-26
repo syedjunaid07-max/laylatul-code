@@ -166,28 +166,19 @@ $('#yr').textContent = new Date().getFullYear();
 
 /* ---------- hero: the burning ring video, the entrance, and the phone menu ---------- */
 // The glow is never drawn in code: a still plate, with the 4s loop fading in over it once its first frame is ready.
-const glowVideos = $$('.glow-motion');
-function startGlowVideo(v) {
-  if (RM.matches || v.dataset.started) return;
-  v.dataset.started = '1';
-  v.addEventListener('loadeddata', () => { v.classList.add('ready'); if (v.dataset.onscreen === '1') v.play().catch(() => {}); }, { once: true });
-  v.addEventListener('error', () => v.remove(), { once: true });
-  v.preload = 'auto';
-  v.src = 'assets/ring-loop.mp4';
+const glowVideo = $('.glow-motion');
+function startGlowVideo() {
+  if (RM.matches || !glowVideo || glowVideo.dataset.started) return;
+  glowVideo.dataset.started = '1';
+  glowVideo.addEventListener('loadeddata', () => { glowVideo.classList.add('ready'); glowVideo.play().catch(() => {}); }, { once: true });
+  glowVideo.addEventListener('error', () => glowVideo.remove(), { once: true });
+  glowVideo.preload = 'auto';
+  glowVideo.src = 'assets/ring-loop.mp4';
 }
-const glowIO = new IntersectionObserver(es => es.forEach(en => {
-  const v = en.target.querySelector('.glow-motion'); if (!v) return;
-  v.dataset.onscreen = en.isIntersecting ? '1' : '0';
-  if (en.isIntersecting) { startGlowVideo(v); if (v.classList.contains('ready') && !RM.matches) v.play().catch(() => {}); }
-  else v.pause();
-}), { rootMargin: '200px 0px' });
-glowVideos.forEach(v => glowIO.observe(v.closest('.hero, .final') || v));
-RM.addEventListener('change', e => glowVideos.forEach(v => { if (e.matches) { v.pause(); v.classList.remove('ready'); } else if (v.dataset.onscreen === '1') { startGlowVideo(v); v.play().catch(() => {}); } }));
-
-// section headlines wipe up out of a clip as they arrive, like the hero's
-$$('main h2').forEach(h => { const inner = h.innerHTML; h.innerHTML = `<span class="wipe"><span>${inner}</span></span>`; });
-const wipeIO = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); wipeIO.unobserve(en.target); } }), { threshold: 0.4 });
-$$('main h2').forEach(h => wipeIO.observe(h));
+startGlowVideo();
+RM.addEventListener('change', e => { if (e.matches && glowVideo) { glowVideo.pause(); glowVideo.classList.remove('ready'); } else { startGlowVideo(); glowVideo && glowVideo.play().catch(() => {}); } });
+// pause the loop while the hero is off screen
+new IntersectionObserver(es => { if (!glowVideo || !glowVideo.dataset.started) return; es[0].isIntersecting && !RM.matches ? glowVideo.play().catch(() => {}) : glowVideo.pause(); }).observe(hero);
 
 // one Web Animations sequence, about 1.9s: nav fades in, badge opens from its centre,
 // the headline wipes up out of its clip, then the subline and each button rise
@@ -286,7 +277,7 @@ addEventListener('scroll', wakeStorm, { passive: true });
 addEventListener('resize', () => { sizeStorm(); wakeStorm(); });
 document.addEventListener('visibilitychange', wakeStorm);
 
-/* ---------- the ember layer: rising embers and orange light streaks behind the sections ---------- */
+/* ---------- the tech layer: data rain, a drifting network, atoms, all falling softly down the page ---------- */
 const techCv = document.createElement('canvas');
 techCv.className = 'tech-layer'; techCv.setAttribute('aria-hidden', 'true');
 document.body.insertBefore(techCv, document.body.firstChild);
@@ -297,8 +288,13 @@ const trnd = rng(2026);
 function techSeed() {
   const { W, H } = tech, area = W * H / 1e6, r = trnd;
   const n = (base, min) => Math.max(min, Math.round(base * area));
-  tech.embers = Array.from({ length: n(LITE ? 40 : 65, 22) }, () => ({ x: r() * W, y: r() * H, v: 0.25 + r() * 0.9, s: 0.7 + r() * 1.9, ph: r() * TAU, sw: 0.2 + r() * 0.5, a: 0.25 + r() * 0.6 }));
-  tech.streaks = Array.from({ length: n(6, 4) }, () => ({ x: r() * W, y: H * (0.2 + r() * 0.7), h: 60 + r() * 200, life: r(), sp: 0.0016 + r() * 0.003 }));
+  tech.rain = Array.from({ length: n(70, 26) }, () => ({ x: r() * W, y: r() * H, v: 0.6 + r() * 2.2, l: 8 + r() * 36, a: 0.12 + r() * 0.3 }));
+  tech.glyphs = Array.from({ length: n(30, 12) }, () => ({ x: r() * W, y: r() * H, v: 0.25 + r() * 0.7, c: GLYPHS[(r() * GLYPHS.length) | 0], s: 10 + r() * 5, a: 0.1 + r() * 0.2, swap: r() * 3 }));
+  tech.nodes = Array.from({ length: n(34, 16) }, () => ({ x: r() * W, y: r() * H, v: 0.15 + r() * 0.45, ph: r() * TAU, sw: 6 + r() * 18 }));
+  tech.atoms = Array.from({ length: n(3.2, 2) }, () => ({ x: r() * W, y: r() * H, v: 0.12 + r() * 0.25, R: 22 + r() * 30, rot: r() * TAU, sp: (0.3 + r() * 0.5) * (r() < 0.5 ? -1 : 1),
+    nuc: Array.from({ length: 7 + ((r() * 5) | 0) }, (_, i) => ({ dx: (r() - 0.5) * 0.36, dy: (r() - 0.5) * 0.36, p: i % 2 === 0 })) }));
+  tech.hexes = Array.from({ length: n(5, 3) }, () => ({ x: r() * W, y: r() * H, v: 0.1 + r() * 0.2, s: 14 + r() * 26, rot: r() * TAU, sp: (r() - 0.5) * 0.01 }));
+  tech.packets = [];
 }
 function sizeTech() {
   tech.W = innerWidth; tech.H = innerHeight;
@@ -310,26 +306,86 @@ sizeTech();
 function wrapY(o, pad) { if (o.y > tech.H + pad) { o.y = -pad; o.x = trnd() * tech.W; return true; } return false; }
 
 function drawTech(t, k) {
-  const { W, H } = tech, c = tc, m = tech.mix, rise = 1 + tech.boost;
+  const { W, H } = tech, c = tc;
   c.clearRect(0, 0, W, H);
+  const fall = 1 + tech.boost;                     // scrolling down makes everything rain faster
+  const m = tech.mix;                              // softer while the hero journey is on screen
   c.globalCompositeOperation = 'lighter';
-  // thin vertical light streaks that glow up and fade, like the ones around the ring
-  for (const s of tech.streaks) {
-    s.life += s.sp * k;
-    if (s.life >= 1) { s.life = 0; s.x = trnd() * W; s.y = H * (0.2 + trnd() * 0.7); s.h = 60 + trnd() * 200; }
-    const a = Math.sin(Math.PI * s.life) * 0.32 * m;
-    const g = c.createLinearGradient(0, s.y - s.h / 2, 0, s.y + s.h / 2);
-    g.addColorStop(0, 'rgba(255,120,30,0)'); g.addColorStop(0.5, `rgba(255,175,90,${a})`); g.addColorStop(1, 'rgba(255,120,30,0)');
-    c.globalAlpha = 1; c.fillStyle = g; c.fillRect(s.x - 1, s.y - s.h / 2, 2, s.h);
-    c.globalAlpha = 0.35; c.fillRect(s.x - 5, s.y - s.h / 2, 10, s.h);
+
+  // network: drifting nodes linked when close, with packets running along the links
+  const LINK = Math.min(170, W * 0.14);
+  for (const nd of tech.nodes) { nd.y += nd.v * fall * k; wrapY(nd, 20); }
+  c.lineWidth = 1;
+  for (let i = 0; i < tech.nodes.length; i++) {
+    const a = tech.nodes[i], ax = a.x + Math.sin(t * 0.4 + a.ph) * a.sw;
+    for (let j = i + 1; j < tech.nodes.length; j++) {
+      const b = tech.nodes[j], bx = b.x + Math.sin(t * 0.4 + b.ph) * b.sw;
+      const d = Math.hypot(ax - bx, a.y - b.y);
+      if (d < LINK) {
+        c.globalAlpha = (1 - d / LINK) * 0.18 * m; c.strokeStyle = '#ffe2bf';
+        c.beginPath(); c.moveTo(ax, a.y); c.lineTo(bx, b.y); c.stroke();
+        if (tech.packets.length < 14 && trnd() < 0.0025 * k) tech.packets.push({ a: i, b: j, p: 0 });
+      }
+    }
+    c.globalAlpha = (0.35 + 0.25 * Math.sin(t * 2 + a.ph)) * m; c.fillStyle = '#fff1dc';
+    c.beginPath(); c.arc(ax, a.y, 1.6, 0, TAU); c.fill();
   }
-  // embers rising and swaying; scrolling stirs them faster
-  for (const e of tech.embers) {
-    e.y -= e.v * rise * k; e.x += Math.sin(t * 0.8 + e.ph) * e.sw * k;
-    if (e.y < -10) { e.y = H + 10; e.x = trnd() * W; }
-    const a = e.a * (0.55 + 0.45 * Math.sin(t * 3 + e.ph)) * m;
-    c.globalAlpha = a * 0.22; c.fillStyle = '#ff7a1a'; c.beginPath(); c.arc(e.x, e.y, e.s * 3, 0, TAU); c.fill();
-    c.globalAlpha = a; c.fillStyle = '#ffc070'; c.beginPath(); c.arc(e.x, e.y, e.s * 0.7, 0, TAU); c.fill();
+  tech.packets = tech.packets.filter(pk => {
+    pk.p += 0.02 * k; if (pk.p >= 1) return false;
+    const a = tech.nodes[pk.a], b = tech.nodes[pk.b];
+    const ax = a.x + Math.sin(t * 0.4 + a.ph) * a.sw, bx = b.x + Math.sin(t * 0.4 + b.ph) * b.sw;
+    const x = ax + (bx - ax) * pk.p, y = a.y + (b.y - a.y) * pk.p;
+    c.globalAlpha = 0.8 * m * Math.sin(Math.PI * pk.p); c.fillStyle = '#ffc070';
+    c.beginPath(); c.arc(x, y, 2.2, 0, TAU); c.fill();
+    return true;
+  });
+
+  // data rain: light streaks with a bright head
+  for (const d of tech.rain) {
+    d.y += d.v * fall * k; wrapY(d, d.l);
+    c.globalAlpha = d.a * 0.35 * m; c.strokeStyle = '#ffecd2'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(d.x, d.y - d.l * fall); c.lineTo(d.x, d.y - d.l * fall * 0.4); c.stroke();
+    c.globalAlpha = d.a * 0.8 * m;
+    c.beginPath(); c.moveTo(d.x, d.y - d.l * fall * 0.4); c.lineTo(d.x, d.y); c.stroke();
+    c.globalAlpha = d.a * 1.6 * m; c.fillStyle = '#fff6ea'; c.fillRect(d.x - 0.8, d.y - 0.8, 1.6, 1.6);
+  }
+
+  // falling code characters
+  c.textAlign = 'center'; c.fillStyle = '#ffe9cf'; c.font = '500 12px "JetBrains Mono", monospace';
+  for (const g of tech.glyphs) {
+    g.y += g.v * fall * k; wrapY(g, 20);
+    g.swap -= 0.016 * k; if (g.swap < 0) { g.swap = 1 + trnd() * 3; g.c = GLYPHS[(trnd() * GLYPHS.length) | 0]; }
+    c.globalAlpha = g.a * m;
+    c.fillText(g.c, g.x, g.y);
+  }
+
+  // slow hexagon outlines
+  c.strokeStyle = '#ffd9a8';
+  for (const h of tech.hexes) {
+    h.y += h.v * fall * k; h.rot += h.sp * k; wrapY(h, h.s * 2);
+    c.globalAlpha = 0.1 * m; c.beginPath();
+    for (let i = 0; i <= 6; i++) { const a = h.rot + i * TAU / 6, x = h.x + Math.cos(a) * h.s, y = h.y + Math.sin(a) * h.s; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.stroke();
+  }
+
+  // atoms: a nucleus of protons and neutrons, electrons on three orbits
+  for (const at of tech.atoms) {
+    at.y += at.v * fall * k; at.rot += 0.002 * k; wrapY(at, at.R * 2);
+    const R = at.R;
+    c.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      c.save(); c.translate(at.x, at.y); c.rotate(at.rot + i * Math.PI / 3);
+      c.globalAlpha = 0.22 * m; c.strokeStyle = '#ffe2bf';
+      c.beginPath(); c.ellipse(0, 0, R, R * 0.34, 0, 0, TAU); c.stroke();
+      const ea = t * at.sp * (1.6 + i * 0.4) + i * 2.1;
+      c.globalAlpha = 0.85 * m; c.fillStyle = '#ffd08a';
+      c.beginPath(); c.arc(Math.cos(ea) * R, Math.sin(ea) * R * 0.34, 2.2, 0, TAU); c.fill();
+      c.restore();
+    }
+    for (const nu of at.nuc) {
+      c.globalAlpha = 0.55 * m; c.fillStyle = nu.p ? '#ff9a3c' : '#fff0dc';
+      c.beginPath(); c.arc(at.x + nu.dx * R * 0.5 + Math.sin(t * 3 + nu.dx * 9) * 0.6, at.y + nu.dy * R * 0.5, Math.max(1.6, R * 0.07), 0, TAU); c.fill();
+    }
   }
   c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
 }
