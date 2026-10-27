@@ -728,7 +728,7 @@ orbImg.decode().then(() => {
   }
   sg.putImageData(im, 0, 0);
   // each band keeps the image where its mask is 1; neighbouring bands cross-fade so, unrotated, they add back up to the original
-  const bands = [[[0, 1], [0.3, 1], [0.38, 0]], [[0.3, 0], [0.38, 1], [0.6, 1], [0.68, 0]], [[0.6, 0], [0.68, 1], [0.94, 1], [1, 0]]];
+  const bands = [[[0, 1], [0.3, 1], [0.38, 0]], [[0.3, 0], [0.38, 1], [0.6, 1], [0.68, 0]], [[0.6, 0], [0.68, 1], [0.88, 1], [0.97, 0]]];
   orb.layers = bands.map(stops => {
     const cv = document.createElement('canvas'); cv.width = cv.height = N;
     const g = cv.getContext('2d');
@@ -740,6 +740,92 @@ orbImg.decode().then(() => {
     return cv;
   });
 }).catch(() => {});   // if the image fails, the drawn hologram below stays
+
+/* energy streams: bundles of glowing threads curl in from the screen's edges, and the orb swallows the light running along them */
+const feed = { lanes: [], n: LITE ? 170 : 360, glow: 0, flashes: [] };
+(() => {
+  const r = rng(77);
+  const dirs = [-2.45, -0.7, 0.1, 0.8, 2.25, 3.05, -1.6];   // where each bundle comes from, around the orb
+  feed.lanes = dirs.map((a, i) => ({ a: a + (r() - 0.5) * 0.2, swirl: 0.8 + r() * 0.5, spread: 0.2 + r() * 0.12, len: 0.9 + r() * 0.3, ph: i * 1.3,
+    strands: Array.from({ length: LITE ? 5 : 10 }, () => ({ off: (r() - 0.5) * 2, ph: r() * TAU })) }));
+  const n = feed.n;
+  feed.lane = new Uint8Array(n); feed.u = new Float32Array(n); feed.off = new Float32Array(n); feed.sp = new Float32Array(n); feed.s = new Float32Array(n);
+  for (let i = 0; i < n; i++) { feed.lane[i] = (r() * dirs.length) | 0; feed.u[i] = r(); feed.off[i] = (r() - 0.5) * 2; feed.sp[i] = 0.6 + r() * 0.8; feed.s[i] = 0.7 + r() * 1.1; }
+})();
+// a point on a bundle: u runs 0 (far off screen) to 1 (inside the orb's rim); the bundle is wide far away and pinches in at the orb
+const LP = [0, 0];
+function lanePt(L, u, off, x, y, R, D, t) {
+  const v = 1 - u, rho = R * 0.9 + (D * L.len - R * 0.9) * v;
+  const ang = L.a - L.swirl * v * v + off * L.spread * Math.pow(v, 1.3) + Math.sin(t * 0.6 + L.ph + v * 4) * 0.05 * v;
+  LP[0] = x + Math.cos(ang) * rho; LP[1] = y + Math.sin(ang) * rho;
+  return LP;
+}
+function stepFeed(dt, k) {
+  const boost = 1 + Math.min(3, Math.abs(orb.svs || 0) * 4);   // scrolling feeds it faster
+  for (let i = 0; i < feed.n; i++) {
+    const u = feed.u[i];
+    feed.u[i] = u + feed.sp[i] * (0.1 + 0.75 * u * u) * boost * dt / 1000;   // pulled in harder as it gets close
+    if (feed.u[i] >= 1) {   // swallowed: a flick of light on the rim, and the core brightens
+      if (orb.R > 20 && feed.flashes.length < 30 && Math.random() < 0.35) feed.flashes.push({ a: feed.lanes[feed.lane[i]].a, life: 1 });
+      feed.glow = Math.min(1, feed.glow + 0.012);
+      feed.u[i] = Math.random() * 0.12; feed.off[i] = (Math.random() - 0.5) * 2;
+    }
+  }
+  feed.glow *= Math.pow(0.93, k);
+  for (const f of feed.flashes) f.life -= 0.06 * k;
+  feed.flashes = feed.flashes.filter(f => f.life > 0);
+}
+function drawFeed(c, x, y, R, t) {
+  const A = clamp((R - 8) / 80, 0, 1); if (A <= 0) return;
+  const D = Math.hypot(orb.W, orb.H) * 0.62, lw = Math.max(0.7, R / 260);
+  c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+  // the threads themselves: faint far away, bright where they plunge into the orb
+  const seg = [new Path2D(), new Path2D(), new Path2D()], cuts = [0, 0.45, 0.78, 1], STEP = LITE ? 14 : 22;
+  for (const L of feed.lanes) for (const s of L.strands) {
+    const off = s.off + Math.sin(t * 0.5 + s.ph) * 0.12;
+    for (let q = 0; q < 3; q++) {
+      const n = Math.max(2, Math.round(STEP * (cuts[q + 1] - cuts[q])));
+      for (let j = 0; j <= n; j++) {
+        const p = lanePt(L, cuts[q] + (cuts[q + 1] - cuts[q]) * j / n, off, x, y, R, D, t);
+        j ? seg[q].lineTo(p[0], p[1]) : seg[q].moveTo(p[0], p[1]);
+      }
+    }
+  }
+  c.strokeStyle = '#ff9a2e';
+  c.globalAlpha = 0.09 * A; c.lineWidth = lw; c.stroke(seg[0]);
+  c.globalAlpha = 0.18 * A; c.stroke(seg[1]);
+  c.globalAlpha = 0.07 * A; c.lineWidth = lw * 5; c.stroke(seg[2]);
+  c.strokeStyle = '#ffc061'; c.globalAlpha = 0.3 * A; c.lineWidth = lw * 1.2; c.stroke(seg[2]);
+  // the energy running along them: streaks that stretch as they speed up, with a hot head
+  const bk = [new Path2D(), new Path2D(), new Path2D()], heads = [];
+  for (let i = 0; i < feed.n; i++) {
+    const u = feed.u[i], L = feed.lanes[feed.lane[i]], tl = 0.025 + 0.06 * u * u;
+    if (u < tl) continue;
+    const a = lanePt(L, u - tl, feed.off[i], x, y, R, D, t), ax = a[0], ay = a[1];
+    const b = lanePt(L, u, feed.off[i], x, y, R, D, t);
+    const q = u < 0.45 ? 0 : u < 0.8 ? 1 : 2;
+    bk[q].moveTo(ax, ay); bk[q].lineTo(b[0], b[1]);
+    if (u > 0.3) heads.push(b[0], b[1], feed.s[i] * lw * (0.8 + u), u);
+  }
+  c.strokeStyle = '#ffb347';
+  c.globalAlpha = 0.35 * A; c.lineWidth = lw * 1.1; c.stroke(bk[0]);
+  c.globalAlpha = 0.6 * A; c.lineWidth = lw * 1.4; c.stroke(bk[1]);
+  c.strokeStyle = '#ffd27a'; c.globalAlpha = 0.9 * A; c.lineWidth = lw * 1.8; c.stroke(bk[2]);
+  c.fillStyle = '#fff1c8';
+  for (let i = 0; i < heads.length; i += 4) {
+    const z = heads[i + 2] * 1.6;
+    c.globalAlpha = A * Math.min(1, heads[i + 3]); c.fillRect(heads[i] - z / 2, heads[i + 1] - z / 2, z, z);
+  }
+}
+function drawFeedFlashes(c, x, y, R) {
+  c.globalCompositeOperation = 'lighter';
+  for (const f of feed.flashes) {
+    const px = x + Math.cos(f.a) * R * 0.9, py = y + Math.sin(f.a) * R * 0.9, s = R * 0.09 * (1.3 - f.life * 0.5);
+    const g = c.createRadialGradient(px, py, 0, px, py, s);
+    g.addColorStop(0, 'rgba(255,240,200,0.9)'); g.addColorStop(0.35, 'rgba(255,180,70,0.45)'); g.addColorStop(1, 'rgba(255,140,30,0)');
+    c.globalAlpha = f.life; c.fillStyle = g; c.fillRect(px - s, py - s, s * 2, s * 2);
+  }
+}
 
 function drawOrbArt(c, x, y, R, t, ex) {
   const r = R * 1.08 * (1 + 0.018 * Math.sin(t * 1.9) + 0.04 * ex);   // gentle breathing
@@ -761,9 +847,10 @@ function drawOrbArt(c, x, y, R, t, ex) {
   });
   // the core pulses
   const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
-  g = c.createRadialGradient(x, y, 0, x, y, r * 0.22);
-  g.addColorStop(0, `rgba(255,240,190,${0.35 + 0.35 * pulse})`); g.addColorStop(0.5, `rgba(255,170,60,${0.15 + 0.15 * pulse})`); g.addColorStop(1, 'rgba(255,140,30,0)');
-  c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.22, 0, TAU); c.fill();
+  g = c.createRadialGradient(x, y, 0, x, y, r * (0.22 + 0.08 * feed.glow));
+  const fed = feed.glow;
+  g.addColorStop(0, `rgba(255,240,190,${Math.min(1, 0.3 + 0.3 * pulse + 0.5 * fed)})`); g.addColorStop(0.5, `rgba(255,170,60,${0.12 + 0.12 * pulse + 0.25 * fed})`); g.addColorStop(1, 'rgba(255,140,30,0)');
+  c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.3, 0, TAU); c.fill();
 }
 
 function drawOrb(c, x, y, R, t, ex, big) {
@@ -891,7 +978,7 @@ function renderOrb(t) {
       oc.globalAlpha = a * 0.5 * Math.min(1, sp / 12); oc.fillRect(px - s / 2, py - s / 2, s, s);
     });
   }
-  if (R > 1.5) drawOrb(oc, x, y, R, t, orb.excite, orb.big);
+  if (R > 1.5) { drawFeed(oc, x, y, R, t); drawOrb(oc, x, y, R, t, orb.excite, orb.big); drawFeedFlashes(oc, x, y, R); }
   // sparks shed by the flares, falling as you scroll down
   oc.strokeStyle = '#ffb04a'; oc.lineCap = 'round';
   for (const s of orb.sparks) {
@@ -941,6 +1028,7 @@ function stepOrb(now) {
   }
   for (const s of orb.sparks) { s.x += s.vx * k; s.y += s.vy * k; s.vy += 0.09 * k; s.vx *= Math.pow(0.99, k); s.life -= 0.022 * k; }
   orb.sparks = orb.sparks.filter(s => s.life > 0 && s.y < orb.H + 20);
+  if (orb.R > 6) stepFeed(dt, k);
   if (now - (orb.lastDraw || 0) >= 32) { renderOrb(t); orb.lastDraw = now; }   // 30 redraws a second is plenty for a hologram
   if (!document.hidden && !RM.matches) orb.raf = requestAnimationFrame(stepOrb);
 }
