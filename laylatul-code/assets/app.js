@@ -741,49 +741,66 @@ orbImg.decode().then(() => {
   });
 }).catch(() => {});   // if the image fails, the drawn hologram below stays
 
-/* energy streams: bundles of glowing threads curl in from the screen's edges, and the orb swallows the light running along them */
-const feed = { lanes: [], n: LITE ? 170 : 360, glow: 0, flashes: [] };
+/* energy streams: fine filaments curve in from the darkness, wrap around the orb and merge into its shell or its core;
+   a few motes of light ride them in, and soft glints mark where they are absorbed */
+const feed = { lanes: [], n: LITE ? 70 : 130, glow: 0, glints: [], motes: [], boost: 1 };
+const glint = document.createElement('canvas');   // one soft dot of light, reused for every particle
+glint.width = glint.height = 32;
 (() => {
+  const g = glint.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,246,220,1)'); gr.addColorStop(0.22, 'rgba(255,205,120,0.65)'); gr.addColorStop(1, 'rgba(255,140,30,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
   const r = rng(77);
-  const dirs = [-2.45, -0.7, 0.1, 0.8, 2.25, 3.05, -1.6];   // where each bundle comes from, around the orb
-  feed.lanes = dirs.map((a, i) => ({ a: a + (r() - 0.5) * 0.2, swirl: 0.8 + r() * 0.5, spread: 0.2 + r() * 0.12, len: 0.9 + r() * 0.3, ph: i * 1.3,
-    strands: Array.from({ length: LITE ? 5 : 10 }, () => ({ off: (r() - 0.5) * 2, ph: r() * TAU })) }));
+  const dirs = [-2.5, -1.45, -0.55, 0.35, 1.2, 2.0, 2.85, 3.6];   // roughly even around the orb, a little irregular
+  feed.lanes = dirs.map((a, i) => ({ a: a + (r() - 0.5) * 0.25, wrap: 1.1 + r() * 0.8, spread: 0.12 + r() * 0.08, len: 0.85 + r() * 0.3, ph: r() * TAU,
+    end: i % 4 === 1 ? 0.14 : 0.8 + r() * 0.12,   // two bundles dive into the core, the rest merge into the outer shell
+    strands: Array.from({ length: LITE ? 3 : 5 }, () => ({ off: (r() - 0.5) * 2, ph: r() * TAU })) }));
   const n = feed.n;
   feed.lane = new Uint8Array(n); feed.u = new Float32Array(n); feed.off = new Float32Array(n); feed.sp = new Float32Array(n); feed.s = new Float32Array(n);
-  for (let i = 0; i < n; i++) { feed.lane[i] = (r() * dirs.length) | 0; feed.u[i] = r(); feed.off[i] = (r() - 0.5) * 2; feed.sp[i] = 0.6 + r() * 0.8; feed.s[i] = 0.7 + r() * 1.1; }
+  for (let i = 0; i < n; i++) { feed.lane[i] = (r() * dirs.length) | 0; feed.u[i] = r(); feed.off[i] = (r() - 0.5) * 2; feed.sp[i] = 0.75 + r() * 0.5; feed.s[i] = 0.6 + r() * 0.8; }
+  // loose motes drifting in on a slow spiral (distances in orb radii)
+  feed.motes = Array.from({ length: LITE ? 14 : 26 }, () => ({ rho: 1 + r() * 2.4, a: r() * TAU, s: 0.6 + r() * 0.9, ph: r() * TAU, sp: 0.7 + r() * 0.6 }));
 })();
-// a point on a bundle: u runs 0 (far off screen) to 1 (inside the orb's rim); the bundle is wide far away and pinches in at the orb
+const smooth = v => { v = clamp(v, 0, 1); return v * v * (3 - 2 * v); };
+// a point on a filament: u runs 0 (out in the dark) to 1 (merged); it sweeps round the orb as it closes in, so the curl happens near the sphere
 const LP = [0, 0];
 function lanePt(L, u, off, x, y, R, D, t) {
-  const v = 1 - u, rho = R * 0.9 + (D * L.len - R * 0.9) * v;
-  const ang = L.a - L.swirl * v * v + off * L.spread * Math.pow(v, 1.3) + Math.sin(t * 0.6 + L.ph + v * 4) * 0.05 * v;
+  const v = 1 - u, rEnd = R * L.end;
+  const rho = rEnd + (D * L.len - rEnd) * Math.pow(v, 1.5);
+  const ang = L.a + L.wrap * Math.pow(u, 2.2) + off * L.spread * Math.pow(v, 1.2) + Math.sin(t * 0.4 + L.ph + v * 3) * 0.03 * v;
   LP[0] = x + Math.cos(ang) * rho; LP[1] = y + Math.sin(ang) * rho;
   return LP;
 }
 function stepFeed(dt, k) {
-  const boost = 1 + Math.min(3, Math.abs(orb.svs || 0) * 4);   // scrolling feeds it faster
+  const target = 1 + Math.min(1.5, Math.abs(orb.svs || 0) * 2);
+  feed.boost += (target - feed.boost) * (1 - Math.pow(0.95, k));   // scrolling feeds it faster, easing in and out
+  const d = feed.boost * dt / 1000;
   for (let i = 0; i < feed.n; i++) {
-    const u = feed.u[i];
-    feed.u[i] = u + feed.sp[i] * (0.1 + 0.75 * u * u) * boost * dt / 1000;   // pulled in harder as it gets close
-    if (feed.u[i] >= 1) {   // swallowed: a flick of light on the rim, and the core brightens
-      if (orb.R > 20 && feed.flashes.length < 30 && Math.random() < 0.35) feed.flashes.push({ a: feed.lanes[feed.lane[i]].a, life: 1 });
-      feed.glow = Math.min(1, feed.glow + 0.012);
-      feed.u[i] = Math.random() * 0.12; feed.off[i] = (Math.random() - 0.5) * 2;
+    feed.u[i] += feed.sp[i] * (0.11 + 0.3 * feed.u[i]) * d;   // a calm, steady pull
+    if (feed.u[i] >= 1) {
+      if (orb.R > 20 && feed.glints.length < 12 && Math.random() < 0.5) feed.glints.push({ l: feed.lane[i], off: feed.off[i], life: 1 });
+      feed.glow = Math.min(1, feed.glow + 0.006);
+      feed.u[i] = Math.random() * 0.05; feed.off[i] = (Math.random() - 0.5) * 2;
     }
   }
-  feed.glow *= Math.pow(0.93, k);
-  for (const f of feed.flashes) f.life -= 0.06 * k;
-  feed.flashes = feed.flashes.filter(f => f.life > 0);
+  feed.glow *= Math.pow(0.975, k);
+  for (const g of feed.glints) g.life -= 0.035 * k;
+  feed.glints = feed.glints.filter(g => g.life > 0);
+  for (const m of feed.motes) {
+    m.rho -= 0.07 * m.sp * d;
+    m.a += 0.16 * m.sp * d / m.rho;   // turns faster the closer it gets
+    if (m.rho < 0.9) { m.rho = 2.8 + Math.random() * 0.6; m.a = Math.random() * TAU; }
+  }
 }
 function drawFeed(c, x, y, R, t) {
   const A = clamp((R - 8) / 80, 0, 1); if (A <= 0) return;
-  const D = Math.hypot(orb.W, orb.H) * 0.62, lw = Math.max(0.7, R / 260);
-  c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
-  // the threads themselves: faint far away, bright where they plunge into the orb
-  const seg = [new Path2D(), new Path2D(), new Path2D()], cuts = [0, 0.45, 0.78, 1], STEP = LITE ? 14 : 22;
+  const D = Math.hypot(orb.W, orb.H) * 0.6, lw = Math.max(0.6, R / 320);
+  c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; c.lineJoin = 'round';
+  // the filaments: barely there in the dark, brightest where they wrap the orb, fading as they merge
+  const cuts = [0, 0.4, 0.72, 0.9, 1], al = [0.035, 0.08, 0.13, 0.05], seg = [new Path2D(), new Path2D(), new Path2D(), new Path2D()], STEP = LITE ? 16 : 26;
   for (const L of feed.lanes) for (const s of L.strands) {
-    const off = s.off + Math.sin(t * 0.5 + s.ph) * 0.12;
-    for (let q = 0; q < 3; q++) {
+    const off = s.off + Math.sin(t * 0.35 + s.ph) * 0.08;
+    for (let q = 0; q < 4; q++) {
       const n = Math.max(2, Math.round(STEP * (cuts[q + 1] - cuts[q])));
       for (let j = 0; j <= n; j++) {
         const p = lanePt(L, cuts[q] + (cuts[q + 1] - cuts[q]) * j / n, off, x, y, R, D, t);
@@ -791,39 +808,44 @@ function drawFeed(c, x, y, R, t) {
       }
     }
   }
-  c.strokeStyle = '#ff9a2e';
-  c.globalAlpha = 0.09 * A; c.lineWidth = lw; c.stroke(seg[0]);
-  c.globalAlpha = 0.18 * A; c.stroke(seg[1]);
-  c.globalAlpha = 0.07 * A; c.lineWidth = lw * 5; c.stroke(seg[2]);
-  c.strokeStyle = '#ffc061'; c.globalAlpha = 0.3 * A; c.lineWidth = lw * 1.2; c.stroke(seg[2]);
-  // the energy running along them: streaks that stretch as they speed up, with a hot head
+  c.strokeStyle = '#ffa93f'; c.lineWidth = lw;
+  for (let q = 0; q < 4; q++) { c.globalAlpha = al[q] * A; c.stroke(seg[q]); }
+  c.globalAlpha = 0.03 * A; c.lineWidth = lw * 4; c.stroke(seg[2]);   // a faint halo where they wrap the sphere
+  // thin light trails riding the filaments, fading in from the dark and dissolving as they merge
   const bk = [new Path2D(), new Path2D(), new Path2D()], heads = [];
   for (let i = 0; i < feed.n; i++) {
-    const u = feed.u[i], L = feed.lanes[feed.lane[i]], tl = 0.025 + 0.06 * u * u;
-    if (u < tl) continue;
-    const a = lanePt(L, u - tl, feed.off[i], x, y, R, D, t), ax = a[0], ay = a[1];
+    const u = feed.u[i], f = smooth(u / 0.3) * (1 - smooth((u - 0.88) / 0.12));
+    if (f < 0.05) continue;
+    const L = feed.lanes[feed.lane[i]], tl = 0.03 + 0.03 * u;
+    const a = lanePt(L, Math.max(0, u - tl), feed.off[i], x, y, R, D, t), ax = a[0], ay = a[1];
     const b = lanePt(L, u, feed.off[i], x, y, R, D, t);
-    const q = u < 0.45 ? 0 : u < 0.8 ? 1 : 2;
+    const q = f < 0.4 ? 0 : f < 0.75 ? 1 : 2;
     bk[q].moveTo(ax, ay); bk[q].lineTo(b[0], b[1]);
-    if (u > 0.3) heads.push(b[0], b[1], feed.s[i] * lw * (0.8 + u), u);
+    if (f > 0.3) heads.push(b[0], b[1], feed.s[i], f);
   }
-  c.strokeStyle = '#ffb347';
-  c.globalAlpha = 0.35 * A; c.lineWidth = lw * 1.1; c.stroke(bk[0]);
-  c.globalAlpha = 0.6 * A; c.lineWidth = lw * 1.4; c.stroke(bk[1]);
-  c.strokeStyle = '#ffd27a'; c.globalAlpha = 0.9 * A; c.lineWidth = lw * 1.8; c.stroke(bk[2]);
-  c.fillStyle = '#fff1c8';
+  c.strokeStyle = '#ffc266'; c.lineWidth = lw * 1.1;
+  c.globalAlpha = 0.18 * A; c.stroke(bk[0]);
+  c.globalAlpha = 0.38 * A; c.stroke(bk[1]);
+  c.globalAlpha = 0.6 * A; c.stroke(bk[2]);
   for (let i = 0; i < heads.length; i += 4) {
-    const z = heads[i + 2] * 1.6;
-    c.globalAlpha = A * Math.min(1, heads[i + 3]); c.fillRect(heads[i] - z / 2, heads[i + 1] - z / 2, z, z);
+    const z = lw * 3.5 * heads[i + 2];
+    c.globalAlpha = heads[i + 3] * 0.8 * A; c.drawImage(glint, heads[i] - z, heads[i + 1] - z, z * 2, z * 2);
+  }
+  // loose motes drifting in on a slow spiral
+  for (const m of feed.motes) {
+    const f = smooth((3.3 - m.rho) / 0.8) * smooth((m.rho - 0.92) / 0.3) * (0.6 + 0.4 * Math.sin(t * 1.7 + m.ph));
+    if (f < 0.03) continue;
+    const z = lw * 4.5 * m.s;
+    c.globalAlpha = f * 0.7 * A; c.drawImage(glint, x + Math.cos(m.a) * m.rho * R - z, y + Math.sin(m.a) * m.rho * R - z, z * 2, z * 2);
   }
 }
-function drawFeedFlashes(c, x, y, R) {
+function drawFeedFlashes(c, x, y, R, t) {   // a soft glint where each stream is absorbed
+  if (!feed.glints.length) return;
+  const D = Math.hypot(orb.W, orb.H) * 0.6;
   c.globalCompositeOperation = 'lighter';
-  for (const f of feed.flashes) {
-    const px = x + Math.cos(f.a) * R * 0.9, py = y + Math.sin(f.a) * R * 0.9, s = R * 0.09 * (1.3 - f.life * 0.5);
-    const g = c.createRadialGradient(px, py, 0, px, py, s);
-    g.addColorStop(0, 'rgba(255,240,200,0.9)'); g.addColorStop(0.35, 'rgba(255,180,70,0.45)'); g.addColorStop(1, 'rgba(255,140,30,0)');
-    c.globalAlpha = f.life; c.fillStyle = g; c.fillRect(px - s, py - s, s * 2, s * 2);
+  for (const g of feed.glints) {
+    const p = lanePt(feed.lanes[g.l], 1, g.off, x, y, R, D, t), s = R * 0.045 * (1.5 - g.life * 0.5);
+    c.globalAlpha = g.life * 0.6; c.drawImage(glint, p[0] - s, p[1] - s, s * 2, s * 2);
   }
 }
 
@@ -978,7 +1000,7 @@ function renderOrb(t) {
       oc.globalAlpha = a * 0.5 * Math.min(1, sp / 12); oc.fillRect(px - s / 2, py - s / 2, s, s);
     });
   }
-  if (R > 1.5) { drawFeed(oc, x, y, R, t); drawOrb(oc, x, y, R, t, orb.excite, orb.big); drawFeedFlashes(oc, x, y, R); }
+  if (R > 1.5) { drawFeed(oc, x, y, R, t); drawOrb(oc, x, y, R, t, orb.excite, orb.big); drawFeedFlashes(oc, x, y, R, t); }
   // sparks shed by the flares, falling as you scroll down
   oc.strokeStyle = '#ffb04a'; oc.lineCap = 'round';
   for (const s of orb.sparks) {
