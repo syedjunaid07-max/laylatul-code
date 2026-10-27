@@ -90,24 +90,38 @@ function heroProgress() {
   return clamp((scrollY - HM.top) / range, 0, 1);
 }
 
-/* ---------- the Multiverse journey canvas (code-drawn hero, and the fallback when no video) ---------- */
-// Scroll down = fly forward: launch through a light bridge, pass portals into four universes
-// (one per kind of website), then exit and watch the website gather from light.
+/* ---------- the data-centre journey canvas (code-drawn hero, and the fallback when no video) ---------- */
+// Scroll down = fly forward down a glowing server hall: dark cabinets with LED strips on both walls, light rails,
+// a glossy floor, and a lit gate at each bay (one per kind of website). At the end the light gathers into the orb.
 const TAU = Math.PI * 2;
 // phones and touch tablets: same look, drawn lighter (lower canvas resolution, fewer extras, 30 fps canvases)
 const LITE = matchMedia('(pointer: coarse)').matches || innerWidth <= 820;
 const PORTALS = [0.18, 0.34, 0.50, 0.66, 0.82];
 const WORLDS = [
-  { a: 0.18, b: 0.34, kind: 'ember',  c0: [62, 16, 6],  c1: [10, 4, 3],  h1: [255, 128, 48],  h2: [255, 70, 30] },
-  { a: 0.34, b: 0.50, kind: 'aurora', c0: [50, 32, 4],  c1: [10, 6, 2],  h1: [255, 196, 74],  h2: [255, 140, 40] },
-  { a: 0.50, b: 0.66, kind: 'neon',   c0: [52, 12, 4],  c1: [9, 3, 2],   h1: [255, 96, 30],   h2: [255, 190, 90] },
-  { a: 0.66, b: 0.82, kind: 'cosmic', c0: [42, 20, 8],  c1: [8, 4, 3],   h1: [255, 150, 60],  h2: [255, 222, 150] }
+  { a: 0.18, b: 0.34, c0: [40, 12, 4], c1: [10, 4, 3], h1: [255, 128, 48] },
+  { a: 0.34, b: 0.50, c0: [38, 24, 4], c1: [10, 6, 2], h1: [255, 196, 74] },
+  { a: 0.50, b: 0.66, c0: [40, 10, 4], c1: [9, 3, 2],  h1: [255, 96, 30] },
+  { a: 0.66, b: 0.82, c0: [34, 16, 6], c1: [8, 4, 3],  h1: [255, 160, 70] }
 ];
 const HUD = [['00', 'Ready for launch'], ['01', 'Online stores'], ['02', 'Restaurants and cafes'], ['03', 'Booking sites'], ['04', 'Web apps'], ['05', 'Your website']];
-const DEPTH = 10, CDEPTH = 9;
+const DEPTH = 10;
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+// the hall, in camera units: floor below, ceiling above, cabinets every S along both walls
+const HALL = { S: 0.9, ZN: 0.2, ZF: 11, KZ: 0.6, YF: 1.0, YT: -0.92, YC: -1.25 };
+const hallHW = wide => wide ? 1.55 : 1.12;
+// 48 cabinet fronts, reused down the hall: rows of LED strips and dots, some blinking, a few running hot
+const RACKS = (() => {
+  const r = rng(311);
+  return Array.from({ length: 48 }, () => {
+    const rows = [], n = LITE ? 9 : 16;
+    for (let k = 0; k < n; k++) {
+      if (r() < 0.12) continue;
+      rows.push({ y: (k + 0.5) / n, x0: 0.04 + r() * 0.2, len: 0.25 + r() * 0.65, dots: r() < 0.35, blink: r() < 0.25 ? 1.5 + r() * 4 : 0, ph: r() * TAU, hot: r() < 0.15 });
+    }
+    return rows;
+  });
+})();
 
-const STAR_PAL = [0, 1, 2, 3, 4].map(ti => { const tr = ti / 4; return [0, 1, 2, 3, 4, 5, 6, 7].map(hi => `hsl(${Math.round(12 + hi * 36 / 7)},${Math.round(40 + 55 * tr)}%,${Math.round(80 - 18 * tr)}%)`); });
 function transitAt(p) { return smoothstep(p, 0.10, 0.18) * (1 - smoothstep(p, 0.80, 0.87)); }
 const TRAVEL = (() => {
   const n = 1000, arr = new Float32Array(n + 1); let acc = 0;
@@ -118,7 +132,7 @@ function travelAt(p) { const f = clamp(p, 0, 1) * 1000, i = Math.floor(f), j = M
 function worldWeight(w, p) { return smoothstep(p, w.a - 0.004, w.a + 0.012) * (1 - smoothstep(p, w.b - 0.004, w.b + 0.012)); }
 function hudIndex(p) { if (p < PORTALS[0]) return 0; if (p >= PORTALS[4]) return 5; for (let i = 0; i < 4; i++) if (p < WORLDS[i].b) return i + 1; return 5; }
 
-const night = { ctx: null, W: 0, H: 0, parts: [], stars: [], clouds: [], sky: null, cyan: null, cloudSpr: [], vel: 0 };
+const night = { ctx: null, W: 0, H: 0, parts: [], stars: [], sky: null, cyan: null, vel: 0 };
 
 function sprite(inner, outer) {
   const c = document.createElement('canvas'); c.width = c.height = 32;
@@ -126,40 +140,15 @@ function sprite(inner, outer) {
   gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.25, inner); gr.addColorStop(1, outer);
   g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return c;
 }
-function cloudSprite(w, seed) {
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const g = c.getContext('2d'), r = rng(seed);
-  g.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 9; i++) {
-    const x = 100 + r() * 56, y = 100 + r() * 56, rad = 36 + r() * 52, col = r() < 0.55 ? w.h1 : w.h2;
-    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
-    gr.addColorStop(0, rgba(col, 0.22)); gr.addColorStop(1, rgba(col, 0));
-    g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-  }
-  return c;
-}
 
 function makeScene() {
   const { W, H } = night, r = rng(7);
   const NT = clamp(Math.round(W * H / 2400), 260, 560);
-  const GA = Math.PI * (3 - Math.sqrt(5));
   night.parts = [];
-  for (let i = 0; i < NT; i++) {
-    const ring = i % 5 === 0;
-    const yy = 1 - 2 * (i + 0.5) / NT, rr = Math.sqrt(1 - yy * yy), th = i * GA;
-    night.parts.push({ ring, ux: Math.cos(th) * rr, uy: yy, uz: Math.sin(th) * rr, th: r() * TAU, rr: 1.08 + r() * 0.16,
-      ang: r() * TAU, rad: 0.35 + r() * 0.9, ph: r() * TAU, sz: 0.9 + r() * 1.5, delay: r() * 0.04 });
-  }
-  const NS = clamp(Math.round(W * H / 1600), 170, 850);   // same density on small screens
-  night.stars = Array.from({ length: NS }, () => ({ th: r() * TAU, rho: 0.22 + Math.pow(r(), 0.7) * 2.8, z0: r() * DEPTH, s: 0.6 + r() * 1.4, ph: r() * TAU }));
-  night.clouds = [];
-  WORLDS.forEach((w, wi) => {
-    for (let i = 0; i < (LITE ? 3 : 6); i++) {
-      let x = (r() - 0.5) * 7, y = (r() - 0.5) * 4.4;
-      if (Math.abs(x) < 0.9 && Math.abs(y) < 0.7) x += x < 0 ? -1.2 : 1.2;
-      night.clouds.push({ wi, x, y, z0: r() * CDEPTH, s: 1.4 + r() * 2.4, spr: i % 2 });
-    }
-  });
+  for (let i = 0; i < NT; i++) night.parts.push({ ang: r() * TAU, rad: 0.35 + r() * 0.9, sz: 0.9 + r() * 1.5, delay: r() * 0.04 });
+  // dust hanging in the hall: still motes at rest, streaks of light while you fly
+  const NS = clamp(Math.round(W * H / 5200), 70, 260);
+  night.stars = Array.from({ length: NS }, () => ({ th: r() * TAU, rho: 0.1 + Math.sqrt(r()) * 0.9, z0: r() * DEPTH, s: 0.6 + r() * 1.4, ph: r() * TAU }));
 }
 
 function sizeCanvas() {
@@ -174,187 +163,166 @@ function sizeCanvas() {
     night.sky = sprite('rgba(255,214,170,.9)', 'rgba(255,110,30,0)');
     night.cyan = sprite('rgba(255,138,31,.95)', 'rgba(255,138,31,0)');
     night.gold = sprite('rgba(255,205,110,.95)', 'rgba(255,120,30,0)');
-    night.cloudSpr = WORLDS.map((w, i) => [cloudSprite(w, 11 + i * 31), cloudSprite(w, 97 + i * 13)]);
   }
   makeScene();
 }
 
+function drawHall(ctx, t, vx, vy, F, cz, wide, md) {
+  const C = HALL, HW = hallHW(wide), { W, H } = night;
+  const X2 = (X, z) => vx + X / z * F, Y2 = (Y, z) => vy + Y / z * F;
+  const fog = z => clamp((C.ZF - z) / (C.ZF * 0.6), 0, 1) * clamp((z - C.ZN) / 0.3, 0, 1);
+  const calmL = wide ? 0.62 : 1;   // the caption side stays quieter
 
-function drawWorldExtras(ctx, w, wt, lp, t, vx, vy, F, trav) {
-  const { W, H } = night;
-  if (w.kind === 'ember') {
-    const R = H * (0.32 + 0.12 * lp), sx = vx + W * 0.16, sy = H * 0.98;
-    const g = ctx.createRadialGradient(sx, sy, R * 0.2, sx, sy, R * 1.6);
-    g.addColorStop(0, rgba([255, 190, 120], 0.55 * wt)); g.addColorStop(0.35, rgba(w.h1, 0.3 * wt)); g.addColorStop(1, rgba(w.h2, 0));
-    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  } else if (w.kind === 'aurora') {
-    for (let k = 0; k < 3; k++) {
-      const base = H * (0.14 + 0.09 * k), amp = H * 0.06, hh = H * (0.32 - 0.05 * k);
-      ctx.beginPath();
-      for (let x = -20; x <= W + 20; x += 24) {
-        const y = base + Math.sin(x * 0.0042 + t * 0.55 + k * 1.7) * amp + Math.sin(x * 0.011 - t * 0.35 + k) * amp * 0.35;
-        x < 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  // the far end of the hall glows where the orb hangs
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1;
+  let g = ctx.createRadialGradient(vx, vy, 0, vx, vy, md * 0.55);
+  g.addColorStop(0, 'rgba(255,150,50,0.2)'); g.addColorStop(1, 'rgba(255,120,30,0)');
+  ctx.fillStyle = g; ctx.fillRect(vx - md * 0.55, vy - md * 0.55, md * 1.1, md * 1.1);
+
+  // rails running to the far end: ceiling lamps, cabinet-top trims, floor edges, floor seams
+  const rail = (X, Y, a, w) => {
+    const z0 = 0.75, x0 = X2(X, z0), y0 = Y2(Y, z0), x1 = X2(X, C.ZF), y1 = Y2(Y, C.ZF);
+    const lg = ctx.createLinearGradient(x0, y0, x1, y1);
+    lg.addColorStop(0, `rgba(255,170,70,${a})`); lg.addColorStop(0.6, `rgba(255,150,50,${a * 0.6})`); lg.addColorStop(0.93, `rgba(255,130,40,${a * 0.15})`); lg.addColorStop(1, 'rgba(255,120,30,0)');
+    ctx.strokeStyle = lg; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  };
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? calmL : 1;
+    rail(s * HW * 0.42, C.YC, 0.55 * k, 2.2); if (!LITE) rail(s * HW * 0.42, C.YC, 0.08 * k, 10);   // ceiling lamps, with a glow
+    rail(s * HW, C.YT - 0.05, 0.5 * k, 1.6);                                               // trim along the cabinet tops
+    rail(s * HW, C.YF, 0.45 * k, 1.6); if (!LITE) rail(s * HW, C.YF, 0.06 * k, 9);                    // floor edge strips
+    for (const f of [0.33, 0.66]) rail(s * HW * f, C.YF, 0.07, 1);                          // floor seams
+  }
+  rail(0, C.YF, 0.12, 1);
+  // cross lines: ceiling beams and floor tiles sliding past
+  const beams = new Path2D(), tiles = new Path2D(), half = C.S / 2;
+  for (let n = Math.floor((cz + C.ZN) / half); n * half - cz < C.ZF; n++) {
+    const z = n * half - cz; if (z <= 0.55) continue;
+    const xl = X2(-HW, z), xr = X2(HW, z);
+    tiles.moveTo(xl, Y2(C.YF, z)); tiles.lineTo(xr, Y2(C.YF, z));
+    if (n % 2 === 0) { beams.moveTo(xl, Y2(C.YC, z)); beams.lineTo(xr, Y2(C.YC, z)); }
+  }
+  ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.07; ctx.stroke(tiles);
+  ctx.globalAlpha = 0.12; ctx.stroke(beams);
+  ctx.globalAlpha = 1;
+
+  // cabinets: dark fronts first (far to near), lights batched by distance and wall
+  ctx.globalCompositeOperation = 'source-over';
+  const D = C.S * 0.86, n0 = Math.floor((cz + C.ZN) / C.S) - 1, n1 = Math.ceil((cz + C.ZF) / C.S);
+  const ZB = z => z < 1.2 ? 0 : z < 2.6 ? 1 : z < 5 ? 2 : 3, LW = [3, 1.9, 1.25, 0.8], BA = [1, 0.95, 0.75, 0.42];
+  const mk = () => Array.from({ length: 8 }, () => new Path2D());
+  const strip = mk(), refl = mk(), post = mk(), frame = mk(), leds = [];
+  for (let n = n1; n >= n0; n--) for (let sd = 0; sd < 2; sd++) {
+    const side = sd ? 1 : -1, X = side * HW, z0 = n * C.S - cz, z1 = z0 + D;
+    if (z1 <= C.ZN || z0 >= C.ZF) continue;
+    const za = Math.max(z0, C.ZN), xa = X2(X, za), xb = X2(X, z1);
+    if (side < 0 ? Math.max(xa, xb) < 0 : Math.min(xa, xb) > W) continue;
+    ctx.globalAlpha = fog((za + z1) / 2) * 0.35 + 0.65; ctx.fillStyle = '#0b0706';
+    ctx.beginPath(); ctx.moveTo(xa, Y2(C.YT, za)); ctx.lineTo(xb, Y2(C.YT, z1)); ctx.lineTo(xb, Y2(C.YF, z1)); ctx.lineTo(xa, Y2(C.YF, za)); ctx.closePath(); ctx.fill();
+    const b = ZB((za + z1) / 2) + sd * 4, rows = RACKS[((n * 7 + sd * 13) % 48 + 48) % 48];
+    if (z0 >= C.ZN) { post[b].moveTo(xa, Y2(C.YT, z0)); post[b].lineTo(xa, Y2(C.YF, z0)); }   // the lit edge between cabinets
+    frame[b].moveTo(xa, Y2(C.YT, za)); frame[b].lineTo(xb, Y2(C.YT, z1)); frame[b].lineTo(xb, Y2(C.YF, z1)); frame[b].lineTo(xa, Y2(C.YF, za));   // cabinet outline
+    const zd = z0 + D * 0.5; if (zd > C.ZN) { frame[b].moveTo(X2(X, zd), Y2(C.YT, zd)); frame[b].lineTo(X2(X, zd), Y2(C.YF, zd)); }   // the split between its two doors
+    for (const row of rows) {
+      if (row.blink && Math.sin(t * row.blink + row.ph) < -0.2) continue;
+      const Y = C.YT + (C.YF - C.YT) * row.y;
+      let s0 = z0 + D * row.x0; const s1 = Math.min(z1 - D * 0.04, s0 + D * row.len);
+      if (s1 <= C.ZN) continue; s0 = Math.max(s0, C.ZN);
+      if (row.dots) {
+        for (let d = 0; d < 3; d++) { const zz = s0 + (s1 - s0) * d / 2; leds.push(X2(X, zz), Y2(Y, zz), Math.min(9, F * 0.014 / zz), fog(zz) * (side < 0 ? calmL : 1) * (row.hot ? 1 : 0.7)); }
+      } else {
+        strip[b].moveTo(X2(X, s0), Y2(Y, s0)); strip[b].lineTo(X2(X, s1), Y2(Y, s1));
+        const Yr = 2 * C.YF - Y;   // its reflection in the glossy floor
+        refl[b].moveTo(X2(X, s0), Y2(Yr, s0)); refl[b].lineTo(X2(X, s1), Y2(Yr, s1));
       }
-      for (let x = W + 20; x >= -20; x -= 24) {
-        const y = base + hh + Math.sin(x * 0.0042 + t * 0.55 + k * 1.7) * amp * 0.6;
-        ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      const g = ctx.createLinearGradient(0, base - amp, 0, base + hh);
-      const col = k === 1 ? w.h2 : w.h1;
-      g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.25, rgba(col, 0.32 * wt)); g.addColorStop(1, rgba(col, 0));
-      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fill();
-    }
-  } else if (w.kind === 'neon') {
-    // perspective grid floor rushing toward the viewer, with towers on both sides
-    ctx.lineWidth = 1;
-    const camH = 0.9, spacing = 0.7, off = (trav * 0.9) % spacing;
-    for (let i = 0; i < 18; i++) {
-      const z = 0.3 + i * spacing - off; if (z <= 0.25) continue;
-      const y = vy + camH / z * F; if (y > H + 4) continue;
-      ctx.globalAlpha = wt * clamp(1 - z / 12, 0, 1) * 0.7; ctx.strokeStyle = rgba(w.h1, 1);
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-    ctx.strokeStyle = rgba(w.h2, 1);
-    for (let X = -6; X <= 6; X += 0.75) {
-      ctx.globalAlpha = wt * 0.5;
-      ctx.beginPath(); ctx.moveTo(vx + X / 0.3 * F, vy + camH / 0.3 * F); ctx.lineTo(vx, vy); ctx.stroke();
-    }
-    for (let i = 0; i < 14; i++) {
-      const side = i % 2 ? 1 : -1, X = side * (1.4 + (i * 0.37) % 1.6), hgt = 0.8 + ((i * 0.53) % 1.4);
-      const z = ((i * 1.3 - trav * 0.9) % 9 + 9) % 9 + 0.35;
-      const f = F / z, x = vx + X * f, yb = vy + camH * f, yt = yb - hgt * f, wd = 0.35 * f;
-      if (x + wd < 0 || x - wd > W) continue;
-      const a = wt * clamp((9 - z) / 3, 0, 1) * clamp((z - 0.35) * 2, 0, 1) * (W / H > 1.15 && x < W * 0.48 ? 0.3 : 1);   // keep the caption side calm
-      ctx.globalAlpha = a * 0.18; ctx.fillStyle = rgba(w.h1, 1); ctx.fillRect(x - wd / 2, yt, wd, yb - yt);
-      ctx.globalAlpha = a * 0.85; ctx.strokeStyle = rgba(i % 3 ? w.h1 : w.h2, 1); ctx.strokeRect(x - wd / 2, yt, wd, yb - yt);
-    }
-  } else if (w.kind === 'cosmic') {
-    // a giant atom around the path: three electron orbits with electrons riding them
-    const R = Math.min(W, H) * (0.34 + 0.1 * lp);
-    ctx.lineWidth = 1.2;
-    for (let i = 0; i < 3; i++) {
-      const rot = i * Math.PI / 3 + t * 0.12, ea = t * (1.1 + i * 0.3) + i * 2;
-      ctx.save(); ctx.translate(vx, vy); ctx.rotate(rot);
-      ctx.globalAlpha = 0.35 * wt; ctx.strokeStyle = rgba(w.h2, 1);
-      ctx.beginPath(); ctx.ellipse(0, 0, R, R * 0.32, 0, 0, TAU); ctx.stroke();
-      ctx.globalAlpha = wt; ctx.drawImage(night.gold, Math.cos(ea) * R - 9, Math.sin(ea) * R * 0.32 - 9, 18, 18);
-      ctx.restore();
     }
   }
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'butt';
+  for (let k = 0; k < 8; k++) {
+    const q = k & 3, a = BA[q] * (k < 4 ? calmL : 1);
+    ctx.strokeStyle = '#ff8a1f'; ctx.globalAlpha = a * 0.22; ctx.lineWidth = Math.max(0.6, LW[q] * 0.5); ctx.stroke(frame[k]);
+    ctx.strokeStyle = '#ffa640';
+    ctx.globalAlpha = a * 0.95; ctx.lineWidth = LW[q]; ctx.stroke(strip[k]);
+    if (!LITE) { ctx.globalAlpha = a * 0.14; ctx.lineWidth = LW[q] * 4; ctx.stroke(strip[k]); }   // phones skip the soft glow passes
+    ctx.globalAlpha = a * 0.13; ctx.lineWidth = LW[q] * 3; ctx.stroke(refl[k]);
+    ctx.strokeStyle = '#ffb04a';
+    ctx.globalAlpha = a * 0.6; ctx.lineWidth = LW[q] * 1.2; ctx.stroke(post[k]);
+    if (!LITE) { ctx.globalAlpha = a * 0.1; ctx.lineWidth = LW[q] * 6; ctx.stroke(post[k]); }
+  }
+  for (let i = 0; i < leds.length; i += 4) {
+    const s = leds[i + 2]; ctx.globalAlpha = leds[i + 3];
+    ctx.drawImage(night.gold, leds[i] - s, leds[i + 1] - s, s * 2, s * 2);
+  }
+  ctx.globalAlpha = 1;
 }
 
-function drawPortal(ctx, P, p, t, vx, vy, md) {
-  const d = P - p;
-  if (d < -0.004 || d > 0.1) return;
-  const a = smoothstep(p, P - 0.1, P - 0.07) * (1 - smoothstep(p, P - 0.002, P + 0.004));
-  if (a <= 0) return;
-  const R = md * 0.006 / (Math.max(d, -0.002) + 0.0065);
-  const next = WORLDS.find(w => Math.abs(w.a - P) < 0.001);
-  // a glimpse of the next universe inside the ring
-  const inner = ctx.createRadialGradient(vx, vy, 0, vx, vy, R);
-  if (next) { inner.addColorStop(0, rgba(next.h1, 0.55 * a)); inner.addColorStop(0.6, rgba(next.c0, 0.5 * a)); inner.addColorStop(1, rgba(next.h2, 0.25 * a)); }
-  else { inner.addColorStop(0, `rgba(255,240,210,${0.5 * a})`); inner.addColorStop(1, `rgba(255,138,31,${0.2 * a})`); }
-  ctx.globalAlpha = 1; ctx.fillStyle = inner; ctx.beginPath(); ctx.arc(vx, vy, R, 0, TAU); ctx.fill();
-  // the rainbow rim
-  let rim;
-  if (ctx.createConicGradient) {
-    rim = ctx.createConicGradient(t * 0.8, vx, vy);
-    ['#ff4d1f', '#ff8a1f', '#ffc24a', '#fff1c8', '#ffc24a', '#ff8a1f', '#ff4d1f', '#ff4d1f'].forEach((c, i, arr) => rim.addColorStop(i / (arr.length - 1), c));
-  } else rim = '#ff8a1f';
-  ctx.strokeStyle = rim;
-  ctx.globalAlpha = a * 0.25; ctx.lineWidth = Math.max(4, R * 0.16); ctx.beginPath(); ctx.arc(vx, vy, R, 0, TAU); ctx.stroke();
-  ctx.globalAlpha = a; ctx.lineWidth = Math.max(1.5, R * 0.035); ctx.beginPath(); ctx.arc(vx, vy, R, 0, TAU); ctx.stroke();
-  // swirling arcs inside
-  for (let i = 0; i < 5; i++) {
-    const rr = R * (0.45 + i * 0.1), st = t * (0.6 + i * 0.35) * (i % 2 ? -1 : 1) + i;
-    ctx.globalAlpha = a * 0.45; ctx.lineWidth = Math.max(1, R * 0.012);
-    ctx.beginPath(); ctx.arc(vx, vy, rr, st, st + 1.4); ctx.stroke();
-  }
+// a lit gate across the hall at each bay; you fly through it as the caption changes
+function drawGate(ctx, z, t, vx, vy, F, wide, i, ga) {
+  const C = HALL; if (z <= C.ZN || z >= C.ZF) return;
+  const HW = hallHW(wide) * 0.94, a = ga * clamp((C.ZF - z) / 4, 0, 1) * clamp((z - C.ZN) / 0.35, 0, 1);
+  const col = i < 4 ? WORLDS[i].h1 : [255, 214, 150];
+  const x0 = vx - HW / z * F, x1 = vx + HW / z * F, yt = vy + C.YC * 0.94 / z * F, yb = vy + C.YF / z * F, w = Math.max(1, 0.028 / z * F);
+  ctx.strokeStyle = rgba(col, 1); ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.moveTo(x0, yb); ctx.lineTo(x0, yt); ctx.lineTo(x1, yt); ctx.lineTo(x1, yb);
+  ctx.globalAlpha = a * 0.16; ctx.lineWidth = w * 5; ctx.stroke();
+  ctx.globalAlpha = a * 0.85; ctx.lineWidth = w; ctx.stroke();
+  // an inner frame with light running round it
+  const ix0 = vx - HW * 0.86 / z * F, ix1 = vx + HW * 0.86 / z * F, iyt = vy + C.YC * 0.84 / z * F;
+  ctx.setLineDash([w * 10, w * 6]); ctx.lineDashOffset = -t * 60;
+  ctx.globalAlpha = a * 0.45; ctx.lineWidth = Math.max(0.6, w * 0.45);
+  ctx.beginPath(); ctx.moveTo(ix0, yb); ctx.lineTo(ix0, iyt); ctx.lineTo(ix1, iyt); ctx.lineTo(ix1, yb); ctx.stroke();
+  ctx.setLineDash([]);
+  // the threshold line on the floor
+  ctx.globalAlpha = a * 0.6; ctx.lineWidth = w * 0.8; ctx.beginPath(); ctx.moveTo(x0, yb); ctx.lineTo(x1, yb); ctx.stroke();
 }
 
 function drawNight(p, t) {
   const { ctx, W, H } = night;
   if (!ctx) return;
   const wide = W / H > 1.15;
-  const vx = W * 0.5;
-  const vy = wide ? H * 0.5 : H * 0.42;
+  const vx = W * 0.5, vy = H * (W < 720 ? 0.38 : 0.5);   // the vanishing point sits on the orb
   const md = Math.min(W, H), F = md * 0.55;
-  const tr = transitAt(p);
-  const trav = travelAt(p) + t * (0.05 + 0.35 * tr);
+  const tr = transitAt(p), base = travelAt(p);
+  const cz = (base + t * (0.05 + 0.35 * tr)) * HALL.KZ;
   const wts = WORLDS.map(w => worldWeight(w, p));
+  const settle = smoothstep(p, 0.84, 0.97);
 
-  // 1. backgrounds: home night, then each universe's own sky
+  // 1. the hall's darkness, warmed a little differently in each bay
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#050304'); bg.addColorStop(0.62, '#0b0706'); bg.addColorStop(1, '#120a07');
+  bg.addColorStop(0, '#060404'); bg.addColorStop(0.55, '#0a0605'); bg.addColorStop(1, '#0e0806');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   WORLDS.forEach((w, i) => {
     if (wts[i] <= 0) return;
-    const g = ctx.createRadialGradient(vx, vy, 0, vx, vy, Math.hypot(W, H) * 0.75);
-    g.addColorStop(0, rgba(w.c0, 1)); g.addColorStop(1, rgba(w.c1, 1));
-    ctx.globalAlpha = wts[i]; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const g = ctx.createRadialGradient(vx, vy, 0, vx, vy, Math.hypot(W, H) * 0.7);
+    g.addColorStop(0, rgba(w.c0, 1)); g.addColorStop(1, rgba(w.c1, 0));
+    ctx.globalAlpha = wts[i] * 0.5; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   });
-  // 2. the light-bridge rainbow around the edges while travelling
-  if (!LITE && tr > 0.01 && ctx.createConicGradient) {
-    const cg = ctx.createConicGradient(t * 0.15, vx, vy);
-    ['#ff4d1f', '#ff8a1f', '#ffc24a', '#fff1c8', '#ffc24a', '#ff8a1f', '#ff4d1f', '#ff4d1f'].forEach((c, i, arr) => cg.addColorStop(i / (arr.length - 1), c));
-    ctx.globalAlpha = 0.11 * tr; ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
-    const dark = ctx.createRadialGradient(vx, vy, 0, vx, vy, md * 0.75);
-    dark.addColorStop(0, 'rgba(6,4,4,0.9)'); dark.addColorStop(1, 'rgba(6,4,4,0)');
-    ctx.globalAlpha = tr; ctx.fillStyle = dark; ctx.fillRect(0, 0, W, H);
-  }
 
+  // 2. the hall itself
+  drawHall(ctx, t, vx, vy, F, cz, wide, md);
+
+  // 3. gates at each bay
   ctx.globalCompositeOperation = 'lighter';
-  // 3. universe scenery and nebula clouds flying past
-  WORLDS.forEach((w, i) => {
-    if (wts[i] <= 0) return;
-    drawWorldExtras(ctx, w, wts[i], clamp((p - w.a) / (w.b - w.a), 0, 1), t, vx, vy, F, trav);
-  });
-  for (const c of night.clouds) {
-    const wt = wts[c.wi]; if (wt <= 0) continue;
-    const zr = ((c.z0 - trav * 0.6) % CDEPTH + CDEPTH) % CDEPTH + 0.4;
-    const size = c.s * F / zr, x = vx + c.x / zr * F, y = vy + c.y / zr * F;
-    if (x + size < 0 || x - size > W || y + size < 0 || y - size > H) continue;
-    if (zr < 0.7) continue;
-    const sz = Math.min(size, md * 0.85);
-    ctx.globalAlpha = wt * 0.45 * clamp((CDEPTH - zr) / 3, 0, 1) * clamp((zr - 0.7) / 0.9, 0, 1);
-    ctx.drawImage(night.cloudSpr[c.wi][c.spr], x - sz, y - sz, sz * 2, sz * 2);
-  }
+  for (let i = 0; i < PORTALS.length; i++) { const P = PORTALS[i], ga = smoothstep(p, P - 0.1, P - 0.06); if (ga > 0) drawGate(ctx, (travelAt(P) - base) * HALL.KZ + 0.12, t, vx, vy, F, wide, i, ga); }
 
-  // 4. stars: calm dots at home, rainbow light streaks while travelling
-  const len = 0.015 + tr * (0.22 + Math.min(night.vel * 18, 3.2));
-  const settle = smoothstep(p, 0.84, 0.97);
-  ctx.lineCap = 'round';
+  // 4. dust: drifting motes at rest, light streaks while flying
+  const HW = hallHW(wide), len = 0.015 + tr * (0.18 + Math.min(night.vel * 14, 2.5));
+  ctx.lineCap = 'round'; ctx.strokeStyle = '#ffc98a';
   for (const s of night.stars) {
-    const zr = ((s.z0 - trav) % DEPTH + DEPTH) % DEPTH + 0.12;
-    const x = Math.cos(s.th) * s.rho, y = Math.sin(s.th) * s.rho;
-    const hx = vx + x / zr * F, hy = vy + y / zr * F;
+    const zr = ((s.z0 - cz * 1.4) % DEPTH + DEPTH) % DEPTH + 0.15;
+    const X = Math.cos(s.th) * s.rho * HW, Y = Math.sin(s.th) * s.rho * 0.95;
+    const hx = vx + X / zr * F, hy = vy + Y / zr * F;
     if (hx < -40 || hx > W + 40 || hy < -40 || hy > H + 40) continue;
-    const z2 = zr + len, tx = vx + x / z2 * F, ty = vy + y / z2 * F;
-    const a = clamp((DEPTH - zr) / 3, 0, 1) * (0.55 + 0.45 * Math.sin(t * 1.7 + s.ph)) * (1 - 0.5 * settle);
-    const hi = Math.round((Math.sin(s.th * 3 + t * 0.5) + 1) * 3.5);
-    ctx.globalAlpha = a;
-    ctx.strokeStyle = tr > 0.02 ? STAR_PAL[Math.round(tr * 4)][hi] : '#ffd8b0';
-    ctx.lineWidth = clamp(s.s * 1.3 / zr, 0.5, 3.4);
+    const z2 = zr + len, tx = vx + X / z2 * F, ty = vy + Y / z2 * F;
+    ctx.globalAlpha = clamp((DEPTH - zr) / 3, 0, 1) * (0.35 + 0.35 * Math.sin(t * 1.7 + s.ph)) * (1 - 0.5 * settle);
+    ctx.lineWidth = clamp(s.s * 0.9 / zr, 0.4, 2.4);
     ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx + 0.01, hy); ctx.stroke();
   }
 
-  // 6. portals between universes
-  for (const P of PORTALS) drawPortal(ctx, P, p, t, vx, vy, md);
-
-  // 7. home again: the multiverse light spirals back into the living orb (drawn on its own layer)
-  const R = wide ? Math.min(W * 0.12, H * 0.23) : Math.min(W * 0.24, H * 0.13);
-  const floorY = vy + R * 2.05, dot = wide ? 1 : 0.75;
-  if (settle > 0) {
-    ctx.save(); ctx.translate(vx, floorY); ctx.scale(1, 0.14);
-    const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 1.8);
-    pool.addColorStop(0, `rgba(255,180,80,${0.32 * settle})`); pool.addColorStop(1, 'rgba(255,140,40,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = pool; ctx.beginPath(); ctx.arc(0, 0, R * 1.8, 0, TAU); ctx.fill(); ctx.restore();
-    const fl = ctx.createLinearGradient(vx - R * 2.6, 0, vx + R * 2.6, 0);
-    fl.addColorStop(0, 'rgba(255,190,90,0)'); fl.addColorStop(0.5, 'rgba(255,200,120,.7)'); fl.addColorStop(1, 'rgba(255,190,90,0)');
-    ctx.globalAlpha = 0.45 * settle; ctx.fillStyle = fl; ctx.fillRect(vx - R * 2.6, floorY, R * 5.2, 1.2);
-  }
+  // 5. the end of the hall: its light spirals into the orb (drawn on its own layer)
+  const dot = wide ? 1 : 0.75, R = wide ? Math.min(W * 0.12, H * 0.23) : Math.min(W * 0.24, H * 0.13);
   for (const q of night.parts) {
     const a = smoothstep(p, 0.8 + q.delay, 0.95 + q.delay);
     if (a <= 0 || a >= 1) continue;
@@ -365,10 +333,10 @@ function drawNight(p, t) {
     ctx.drawImage(night.gold, x - s * 2, y - s * 2, s * 4, s * 4);
   }
 
-  // 8. the flash of crossing each portal
+  // 6. a soft wash of light as you pass each gate
   let flash = 0;
-  for (const P of PORTALS) flash += Math.exp(-Math.pow((p - P) / 0.007, 2));
-  if (flash > 0.01) { ctx.globalAlpha = Math.min(0.5, 0.5 * flash); ctx.fillStyle = '#fff0dc'; ctx.fillRect(0, 0, W, H); }
+  for (const P of PORTALS) flash += Math.exp(-Math.pow((p - P) / 0.006, 2));
+  if (flash > 0.01) { ctx.globalAlpha = Math.min(0.22, 0.22 * flash); ctx.fillStyle = '#ffd9a8'; ctx.fillRect(0, 0, W, H); }
 
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 }
@@ -706,7 +674,60 @@ sizeOrb();
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
   const W = orb.W, H = orb.H, narrow = W < 720, hl = heroLive();
-  return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.3 : 0.27) : 0, big: 1, hero: hl, soft: true };
+  return { x: W / 2, y: H * (narrow ? 0.38 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.28 : 0.27) : 0, big: 1, hero: hl, soft: true };
+}
+
+/* the projector the orb floats above: a dark platform with turning light rings, a beam rising into the orb, and a halo ring overhead.
+   It stays put while the orb drifts. */
+function drawPedestal(c, R, t) {
+  const T = orbTarget(), A = clamp((R - 8) / 80, 0, 1);
+  if (!T.R || A <= 0) return;
+  const narrow = orb.W < 720, x = T.x, lw = Math.max(1, R / 170);
+  const rx = R * (narrow ? 1.0 : 1.3), ry = rx * 0.17, yb = T.y + R * (narrow ? 1.12 : 1.32), th = ry * 0.45;
+
+  // the beam rising from the platform into the orb
+  c.globalCompositeOperation = 'lighter';
+  let g = c.createLinearGradient(0, yb, 0, T.y);
+  g.addColorStop(0, `rgba(255,170,70,${0.14 * A})`); g.addColorStop(1, 'rgba(255,140,40,0)');
+  c.globalAlpha = 1; c.fillStyle = g;
+  c.beginPath(); c.moveTo(x - rx * 0.6, yb); c.lineTo(x - R * 0.4, T.y); c.lineTo(x + R * 0.4, T.y); c.lineTo(x + rx * 0.6, yb); c.closePath(); c.fill();
+  // the pool of light it throws on the floor
+  c.save(); c.translate(x, yb + th); c.scale(1, 0.18);
+  g = c.createRadialGradient(0, 0, 0, 0, 0, rx * 2.3);
+  g.addColorStop(0, `rgba(255,160,60,${0.32 * A})`); g.addColorStop(1, 'rgba(255,120,30,0)');
+  c.fillStyle = g; c.fillRect(-rx * 2.3, -rx * 2.3, rx * 4.6, rx * 4.6); c.restore();
+
+  // the platform: a dark disc standing a little proud of the floor
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 0.94 * A; c.fillStyle = '#0a0605';
+  c.beginPath(); c.ellipse(x, yb + th, rx, ry, 0, 0, Math.PI); c.lineTo(x - rx, yb); c.ellipse(x, yb, rx, ry, 0, Math.PI, TAU); c.closePath(); c.fill();
+  c.globalCompositeOperation = 'lighter';
+  c.strokeStyle = '#ff9a2e'; c.lineWidth = lw;
+  c.globalAlpha = 0.45 * A; c.beginPath(); c.ellipse(x, yb + th, rx, ry, 0, 0, Math.PI); c.stroke();   // lower edge
+  c.strokeStyle = '#ffc061';
+  c.globalAlpha = 0.14 * A; c.lineWidth = lw * 7; c.beginPath(); c.ellipse(x, yb, rx, ry, 0, 0, TAU); c.stroke();
+  c.globalAlpha = 0.9 * A; c.lineWidth = lw * 1.3; c.stroke();                                              // bright top rim
+  // light rings turning on its surface
+  [[0.8, 1, [26, 8, 4, 8]], [0.6, -1.4, [14, 6]], [0.42, 0.8, [40, 10]]].forEach(([k, sp, dash]) => {
+    c.setLineDash(dash.map(d => d * lw)); c.lineDashOffset = t * 24 * sp;
+    c.globalAlpha = 0.6 * A; c.lineWidth = lw;
+    c.beginPath(); c.ellipse(x, yb, rx * k, ry * k, 0, 0, TAU); c.stroke();
+  });
+  c.setLineDash([]);
+  // the bright emitter at its centre
+  c.save(); c.translate(x, yb); c.scale(1, 0.2);
+  g = c.createRadialGradient(0, 0, 0, 0, 0, rx * 0.4);
+  g.addColorStop(0, `rgba(255,236,190,${0.75 * A})`); g.addColorStop(0.4, `rgba(255,170,60,${0.35 * A})`); g.addColorStop(1, 'rgba(255,140,30,0)');
+  c.globalAlpha = 1; c.fillStyle = g; c.fillRect(-rx * 0.4, -rx * 0.4, rx * 0.8, rx * 0.8); c.restore();
+
+  // the halo ring overhead
+  const yh = T.y - R * (narrow ? 1.18 : 1.3), hx = R * 0.85, hy = hx * 0.17;
+  c.strokeStyle = '#ffc061';
+  c.globalAlpha = 0.12 * A; c.lineWidth = lw * 7; c.beginPath(); c.ellipse(x, yh, hx, hy, 0, 0, TAU); c.stroke();
+  c.globalAlpha = 0.85 * A; c.lineWidth = lw * 1.3; c.stroke();
+  c.setLineDash([30 * lw, 10 * lw, 4 * lw, 10 * lw]); c.lineDashOffset = -t * 30;
+  c.strokeStyle = '#ff9a2e'; c.globalAlpha = 0.55 * A; c.lineWidth = lw;
+  c.beginPath(); c.ellipse(x, yh, hx * 1.18, hy * 1.18, 0, 0, TAU); c.stroke();
+  c.setLineDash([]);
 }
 
 /* the orb artwork: one image cut into three soft-edged rings (core, middle, shell) that turn at their own speeds */
@@ -1000,7 +1021,7 @@ function renderOrb(t) {
       oc.globalAlpha = a * 0.5 * Math.min(1, sp / 12); oc.fillRect(px - s / 2, py - s / 2, s, s);
     });
   }
-  if (R > 1.5) { drawFeed(oc, x, y, R, t); drawOrb(oc, x, y, R, t, orb.excite, orb.big); drawFeedFlashes(oc, x, y, R, t); }
+  if (R > 1.5) { drawPedestal(oc, R, t); drawFeed(oc, x, y, R, t); drawOrb(oc, x, y, R, t, orb.excite, orb.big); drawFeedFlashes(oc, x, y, R, t); }
   // sparks shed by the flares, falling as you scroll down
   oc.strokeStyle = '#ffb04a'; oc.lineCap = 'round';
   for (const s of orb.sparks) {

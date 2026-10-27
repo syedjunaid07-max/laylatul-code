@@ -18,7 +18,7 @@ The site is plain HTML, CSS and JavaScript. There is no framework, no build step
 
 1. **Settings** at the very top: WhatsApp number, email, AI video switch
 2. **Hero captions** that fade in and out as you scroll
-3. **Multiverse journey** (`drawNight`): portals, four universes, light streaks, lightning, drawn on a canvas
+3. **Data-centre journey** (`drawNight`, `drawHall`, `drawGate`): fly down a glowing server hall with a gate at each bay, drawn on a canvas
 4. **Optional scroll video** loader, switched off until a video exists (`HAS_VIDEO`)
 5. **Static hero rules** for reduced motion, short landscape phones, and phones too slow for the journey (`slowPhone`). The `GATES` list must match the CSS media query exactly
 6. **Section animations**: strike-throughs, timeline line, reveals
