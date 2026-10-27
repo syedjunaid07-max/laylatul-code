@@ -675,23 +675,24 @@ const orb = { x: innerWidth * 0.72, y: innerHeight * 0.47, vx: 0, vy: 0, R: 40, 
   waves: [], mx: -1, my: -1, trail: [], W: 0, H: 0, pts: [], swarm: [], beams: [], arcs: [], sparks: [], scrollRot: 0, lastSY: scrollY, last: 0, raf: null, anchor: null };
 (() => {
   const r = rng(42);
-  // a dense shell of embers, thicker near the surface
-  for (let i = 0; i < 2000; i++) {
-    const u = r() * 2 - 1, th = r() * TAU, rr = Math.sqrt(1 - u * u);
-    const rj = 0.62 + Math.pow(r(), 0.45) * 0.55;
-    orb.pts.push({ x: Math.cos(th) * rr, y: u, z: Math.sin(th) * rr, rj, ph: r() * TAU });
+  // data fragments: short glowing lines and chips scattered over the sphere's surface, in a few shells
+  const NF = LITE ? 480 : 850;
+  for (let i = 0; i < NF; i++) {
+    const lat = Math.asin(r() * 2 - 1) * 0.92, lon = r() * TAU;
+    orb.pts.push({ lat, lon, dl: 0.02 + Math.pow(r(), 2.2) * 0.32, rad: 0.82 + r() * 0.2, chip: r() < 0.28, b: 0.45 + r() * 0.55, ph: r() * TAU });
   }
-  // a swirling galaxy disk around it
-  for (let i = 0; i < 900; i++) {
-    const rr = 1.0 + Math.pow(r(), 0.8) * 0.75;
-    orb.swarm.push({ a: r() * TAU, rr, h: (r() - 0.5) * 0.14 * rr, w: 0.32 / rr, ph: r() * TAU });
+  // floating sparks around it
+  for (let i = 0; i < (LITE ? 160 : 320); i++) {
+    orb.swarm.push({ lat: Math.asin(r() * 2 - 1), lon: r() * TAU, rad: 0.9 + Math.pow(r(), 1.5) * 0.6, s: 0.6 + r() * 1.4, ph: r() * TAU });
   }
-  // long solar flare beams; some cut straight through the core
-  for (let i = 0; i < 24; i++) {
-    orb.beams.push({ a: r() * TAU, l: 1.1 + Math.pow(r(), 1.6) * 0.85, through: r() < 0.35, l2: 0.5 + r() * 0.9, w: 1 + r() * 1.8, ph: r() * TAU });
-  }
-  // bold arc segments
-  orb.arcs = [[0.92, 1.3, 0.35, 1], [1.06, 0.7, -0.5, 0.6], [1.22, 1.7, 0.22, 0.8], [0.8, 0.55, -0.7, 1.2]].map(([rr, span, w, k], i) => ({ rr, span, w, k, s: i * 1.7 }));
+  // fine straight lines crossing the sphere, each carrying a pulse of light
+  for (let i = 0; i < 9; i++) orb.beams.push({ a: r() * TAU, off: (r() - 0.5) * 0.5, len: 0.8 + r() * 0.35, sp: 0.2 + r() * 0.5, ph: r() });
+  // segmented rings: latitudes and meridians, each with its own dash rhythm
+  orb.rings = [];
+  for (let k = -5; k <= 5; k++) orb.rings.push({ kind: 'lat', v: k * 0.25, dash: [6 + r() * 30, 3 + r() * 9, 1 + r() * 6, 3 + r() * 8], rad: 0.93 + r() * 0.08 });
+  for (let k = 0; k < 8; k++) orb.rings.push({ kind: 'lon', v: k * Math.PI / 8, dash: [8 + r() * 26, 3 + r() * 10, 2 + r() * 4, 4 + r() * 6], rad: 0.95 + r() * 0.06 });
+  // partial outer rings, like a hologram's frame
+  orb.arcs = [[1.08, 1.6, 0.18, 1], [1.16, 0.9, -0.3, 0.6], [1.24, 2.1, 0.1, 0.8], [1.0, 0.7, -0.45, 1.2]].map(([rr, span, w, k], i) => ({ rr, span, w, k, s: i * 1.7 }));
 })();
 function sizeOrb() {
   const dpr = LITE ? Math.min(1.6, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);   // the orb is the star on phones: keep it crisp
@@ -709,84 +710,116 @@ function orbTarget() {
 }
 
 function drawOrb(c, x, y, R, t, ex, big) {
-  const r = R * (1 + 0.03 * Math.sin(t * 2.2) + 0.05 * ex);
-  const step = Math.max(LITE ? 2 : 1, R > 80 ? 1 : R > 40 ? 2 : R > 22 ? 3 : 5);      // fewer embers when small or on phones
-  const unit = Math.max(0.6, r / 120), rot = orb.scrollRot;
-  c.globalCompositeOperation = 'lighter';
+  const r = R * (1 + 0.025 * Math.sin(t * 2.2) + 0.05 * ex);
+  const rot = orb.scrollRot, spin = orb.spin + rot * 0.6;
+  const cS = Math.cos(spin), sS = Math.sin(spin), tilt = 0.34, ct = Math.cos(tilt), st = Math.sin(tilt);
+  // rotate a point on the unit sphere and project it; returns [screenX, screenY, depth(-1 back .. 1 front)]
+  const P = (lat, lon, rad) => {
+    const cl = Math.cos(lat), X0 = cl * Math.cos(lon), Z0 = cl * Math.sin(lon), Y0 = Math.sin(lat);
+    const X = X0 * cS - Z0 * sS, Z = X0 * sS + Z0 * cS, Y2 = Y0 * ct - Z * st, Z2 = Y0 * st + Z * ct;
+    return [x + X * r * rad, y - Y2 * r * rad, Z2];
+  };
+  const thin = Math.max(0.6, r / 220);
+  c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
 
-  // soft solar glow
-  const gR = LITE ? r * 2 : Math.min(r * 2.8, r * 1.6 + 160);
-  let g = c.createRadialGradient(x, y, 0, x, y, gR);
-  g.addColorStop(0, `rgba(255,140,30,${0.26 + 0.12 * ex})`); g.addColorStop(0.45, 'rgba(255,90,10,0.08)'); g.addColorStop(1, 'rgba(255,80,10,0)');
+  // a soft golden haze behind it
+  const gR = LITE ? r * 1.8 : r * 2.3;
+  let g = c.createRadialGradient(x, y, r * 0.1, x, y, gR);
+  g.addColorStop(0, `rgba(255,170,60,${0.22 + 0.1 * ex})`); g.addColorStop(0.5, 'rgba(255,120,20,0.07)'); g.addColorStop(1, 'rgba(255,100,10,0)');
   c.globalAlpha = 1; c.fillStyle = g; c.fillRect(x - gR, y - gR, gR * 2, gR * 2);
 
-  // the ember shell, drawn in three depth layers
-  const spin = orb.spin + rot * 0.6, cS = Math.cos(spin), sS = Math.sin(spin), ct = Math.cos(0.32), st = Math.sin(0.32);
-  const layers = [[], [], []], ds = Math.max(1.1, r / 85);
+  // segmented rings, dim at the back and bright at the front (dashes drawn as short chunks: much cheaper than line dashes)
+  const SEG = LITE ? 40 : 48, ringBack = new Path2D(), ringFront = new Path2D(), drift = Math.floor(t * 3);
+  orb.rings.forEach((ring, ri) => {
+    let prev = null;
+    for (let i = 0; i <= SEG; i++) {
+      const a = i / SEG * TAU;
+      const p = ring.kind === 'lat' ? P(ring.v, a, ring.rad) : P(a, ring.v, ring.rad);
+      const on = ((i + ri * 3 + drift * (ring.kind === 'lat' ? 1 : -1)) % 7 + 7) % 7 < 4;   // 4 on, 3 off, sliding slowly
+      if (prev && on) { const path = (prev[2] + p[2]) > 0 ? ringFront : ringBack; path.moveTo(prev[0], prev[1]); path.lineTo(p[0], p[1]); }
+      prev = p;
+    }
+  });
+  c.strokeStyle = '#ff8a1f'; c.globalAlpha = 0.16; c.lineWidth = thin * 0.9; c.stroke(ringBack);
+  c.strokeStyle = '#ffc061'; c.globalAlpha = 0.55; c.lineWidth = thin * 1.2; c.stroke(ringFront);
+
+  // data fragments over the surface: short lines along the latitudes, and little glowing chips
+  const step = LITE ? 1 : (R > 60 ? 1 : 2);
+  const back = new Path2D(), mid = new Path2D(), fr = new Path2D(), chips = [];
   for (let i = 0; i < orb.pts.length; i += step) {
     const q = orb.pts[i];
-    const X = q.x * cS - q.z * sS, Z = q.x * sS + q.z * cS, Y2 = q.y * ct - Z * st, Z2 = q.y * st + Z * ct;
-    const d = q.rj * (1 + 0.035 * Math.sin(t * 1.7 + q.ph));
-    layers[Z2 < -0.33 ? 0 : Z2 < 0.33 ? 1 : 2].push(x + X * r * d, y + Y2 * r * d);
+    const a = P(q.lat, q.lon, q.rad), b = P(q.lat, q.lon + q.dl, q.rad), d = (a[2] + b[2]) / 2;
+    const path = d < -0.3 ? back : d < 0.35 ? mid : fr;
+    path.moveTo(a[0], a[1]); path.lineTo(b[0], b[1]);
+    if (q.chip && d > -0.2) chips.push(a[0], a[1], d, q.b * (0.6 + 0.4 * Math.sin(t * 3 + q.ph)));
   }
-  c.fillStyle = '#ff9a2e';
-  [0.4, 0.7, 1].forEach((a, li) => {
-    const L = layers[li], s = ds * (0.8 + li * 0.35);
-    c.globalAlpha = a;
-    for (let i = 0; i < L.length; i += 2) c.fillRect(L[i] - s / 2, L[i + 1] - s / 2, s, s);
-  });
-
-  // swirling galaxy disk, tilted around the sphere
-  const dt0 = 1.05, cD = Math.cos(dt0), sD = Math.sin(dt0), sc0 = Math.cos(-0.35), ss0 = Math.sin(-0.35);
-  c.fillStyle = '#ffb347'; c.globalAlpha = 0.8;
-  for (let i = 0; i < orb.swarm.length; i += step) {
-    const q = orb.swarm[i], ang = q.a + orb.spin * q.w * 4.5 + rot;
-    const X = Math.cos(ang) * q.rr, Z = Math.sin(ang) * q.rr, Y = q.h;
-    const Y2 = Y * cD - Z * sD;
-    const px = X * sc0 - Y2 * ss0, py = X * ss0 + Y2 * sc0, s = ds * 0.9;
-    c.fillRect(x + px * r - s / 2, y + py * r - s / 2, s, s);
+  c.strokeStyle = '#ff9a2e'; c.lineWidth = thin * 1.1; c.globalAlpha = 0.22; c.stroke(back);
+  c.strokeStyle = '#ffb347'; c.lineWidth = thin * 1.4; c.globalAlpha = 0.5; c.stroke(mid);
+  c.strokeStyle = '#ffd27a'; c.lineWidth = thin * 1.8; c.globalAlpha = 0.9; c.stroke(fr);
+  c.fillStyle = '#ffe6a8';
+  const cs = Math.max(1.4, r / 70);
+  for (let i = 0; i < chips.length; i += 4) {
+    c.globalAlpha = Math.min(1, chips[i + 3] * (0.5 + chips[i + 2]));
+    c.fillRect(chips[i] - cs, chips[i + 1] - cs * 0.45, cs * 2, cs * 0.9);
   }
 
-  // wireframe globe inside
-  c.strokeStyle = '#ff8a1f'; c.lineWidth = Math.max(0.7, r / 150); c.globalAlpha = 0.65;
-  const gr = r * 0.74;
-  for (let k = 0; k < 8; k++) {
-    const phi = k * Math.PI / 8 + spin;
-    c.beginPath(); c.ellipse(x, y, gr * Math.abs(Math.sin(phi)), gr, 0.12, 0, TAU); c.stroke();
-  }
-  for (let k = -3; k <= 3; k++) {
-    const lat = k * 0.4, yy = y + Math.sin(lat) * gr * ct, rx = Math.cos(lat) * gr;
-    c.beginPath(); c.ellipse(x, yy, rx, rx * st, 0.12, 0, TAU); c.stroke();
+  // the swirling loop inside, turning on its own axis
+  for (let k = 0; k < 2; k++) {
+    const ax = t * (0.5 + k * 0.25) + k * 1.9, ca = Math.cos(ax), sa = Math.sin(ax), rr = 0.5 - k * 0.12;
+    c.beginPath();
+    for (let i = 0; i <= 48; i++) {
+      const a = i / 48 * TAU, px = Math.cos(a) * rr, py = Math.sin(a) * rr * 0.45;
+      const X = px * ca - py * sa * 0.6, Y = px * sa * 0.5 + py * ca;
+      i ? c.lineTo(x + X * r, y + Y * r) : c.moveTo(x + X * r, y + Y * r);
+    }
+    c.strokeStyle = '#ffcf70'; c.globalAlpha = 0.25; c.lineWidth = thin * 6; c.stroke();
+    c.globalAlpha = 0.85; c.lineWidth = thin * 1.8; c.stroke();
   }
 
-  // bold arc segments
-  c.strokeStyle = '#ff9d2e'; c.lineCap = 'round';
+  // fine straight lines crossing the sphere, each with a pulse of light running along it
+  for (const b of orb.beams) {
+    const ang = b.a + rot * 0.5 + Math.sin(t * 0.2 + b.ph * 6) * 0.04, ca = Math.cos(ang), sa = Math.sin(ang);
+    const ox = -sa * b.off * r, oy = ca * b.off * r, L = b.len * r * (1 + Math.min(0.4, Math.abs(orb.svs) * 0.6));
+    const x0 = x + ox - ca * L, y0 = y + oy - sa * L, x1 = x + ox + ca * L, y1 = y + oy + sa * L;
+    const lg = c.createLinearGradient(x0, y0, x1, y1);
+    lg.addColorStop(0, 'rgba(255,170,60,0)'); lg.addColorStop(0.5, 'rgba(255,200,110,0.55)'); lg.addColorStop(1, 'rgba(255,170,60,0)');
+    c.strokeStyle = lg; c.globalAlpha = 1; c.lineWidth = thin;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    const f = (t * b.sp + b.ph) % 1, px = x0 + (x1 - x0) * f, py = y0 + (y1 - y0) * f;
+    c.globalAlpha = Math.sin(Math.PI * f) * 0.9; c.fillStyle = '#fff1c8';
+    c.beginPath(); c.arc(px, py, Math.max(1.2, r / 90), 0, TAU); c.fill();
+  }
+
+  // partial outer rings
+  c.strokeStyle = '#ffb347';
   for (const a of orb.arcs) {
     const a0 = a.s + t * a.w + rot * a.k;
-    if (!LITE) { c.globalAlpha = 0.25; c.lineWidth = Math.max(4, r * 0.09); c.beginPath(); c.arc(x, y, r * a.rr, a0, a0 + a.span); c.stroke(); }
-    c.globalAlpha = 0.9; c.lineWidth = Math.max(1.5, r * 0.035);
+    c.globalAlpha = 0.6; c.lineWidth = thin * 1.6;
     c.beginPath(); c.arc(x, y, r * a.rr, a0, a0 + a.span); c.stroke();
   }
 
-  // solar flare beams: they turn with the scroll, so scrolling down sweeps them down
-  const reach = 1 + 0.25 * ex + 0.15 * big + Math.min(0.6, Math.abs(orb.svs) * 0.9);
-  for (const b of orb.beams) {
-    const ang = b.a + rot + Math.sin(t * 0.3 + b.ph) * 0.03;
-    const len = r * b.l * reach * (0.9 + 0.12 * Math.sin(t * 3.1 + b.ph));
-    const back = b.through ? -r * b.l2 : r * 0.12;
-    const ca = Math.cos(ang), sa = Math.sin(ang);
-    const x0 = x + ca * back, y0 = y + sa * back, x1 = x + ca * len, y1 = y + sa * len;
-    const lg = c.createLinearGradient(x0, y0, x1, y1);
-    lg.addColorStop(0, 'rgba(255,170,60,0.35)'); lg.addColorStop(b.through ? 0.45 : 0.08, 'rgba(255,190,90,1)'); lg.addColorStop(1, 'rgba(255,110,20,0)');
-    c.strokeStyle = lg;
-    if (!LITE) { c.globalAlpha = 0.22; c.lineWidth = b.w * unit * 4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
-    c.globalAlpha = 0.95; c.lineWidth = b.w * unit * (LITE ? 1.5 : 1); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+  // floating sparks
+  c.fillStyle = '#ffd27a';
+  for (let i = 0; i < orb.swarm.length; i += step) {
+    const s = orb.swarm[i], p = P(s.lat, s.lon + t * 0.05, s.rad);
+    c.globalAlpha = (0.35 + 0.65 * Math.max(0, Math.sin(t * 2.5 + s.ph))) * (p[2] > 0 ? 1 : 0.4);
+    const z = s.s * Math.max(0.8, r / 140);
+    c.fillRect(p[0] - z / 2, p[1] - z / 2, z, z);
   }
 
-  // white-gold core
-  g = c.createRadialGradient(x, y, 0, x, y, r * 0.55);
-  g.addColorStop(0, 'rgba(255,253,235,1)'); g.addColorStop(0.16, 'rgba(255,238,150,1)'); g.addColorStop(0.38, 'rgba(255,170,40,0.55)'); g.addColorStop(1, 'rgba(255,110,20,0)');
-  c.globalAlpha = 0.92 + 0.08 * Math.sin(t * 5); c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.55, 0, TAU); c.fill();
+  // the lens at the centre: a dark pupil inside a bright ring, with a glow
+  c.globalCompositeOperation = 'source-over';
+  g = c.createRadialGradient(x, y, 0, x, y, r * 0.13);
+  g.addColorStop(0, 'rgba(25,10,2,0.85)'); g.addColorStop(1, 'rgba(25,10,2,0)');
+  c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.13, 0, TAU); c.fill();
+  c.globalCompositeOperation = 'lighter';
+  g = c.createRadialGradient(x, y, r * 0.06, x, y, r * 0.3);
+  g.addColorStop(0, 'rgba(255,220,140,0.45)'); g.addColorStop(1, 'rgba(255,150,40,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.3, 0, TAU); c.fill();
+  c.strokeStyle = '#fff0c4'; c.globalAlpha = 0.95; c.lineWidth = Math.max(1.5, r * 0.022);
+  c.beginPath(); c.arc(x, y, r * 0.1, 0, TAU); c.stroke();
+  c.strokeStyle = '#ffb347'; c.globalAlpha = 0.6; c.lineWidth = thin;
+  c.beginPath(); c.arc(x, y, r * 0.17, t * 0.8, t * 0.8 + 4.6); c.stroke();
 }
 
 function renderOrb(t) {
@@ -850,7 +883,7 @@ function stepOrb(now) {
   }
   for (const s of orb.sparks) { s.x += s.vx * k; s.y += s.vy * k; s.vy += 0.09 * k; s.vx *= Math.pow(0.99, k); s.life -= 0.022 * k; }
   orb.sparks = orb.sparks.filter(s => s.life > 0 && s.y < orb.H + 20);
-  if (!LITE || now - (orb.lastDraw || 0) >= 32) { renderOrb(t); orb.lastDraw = now; }
+  if (now - (orb.lastDraw || 0) >= 32) { renderOrb(t); orb.lastDraw = now; }   // 30 redraws a second is plenty for a hologram
   if (!document.hidden && !RM.matches) orb.raf = requestAnimationFrame(stepOrb);
 }
 function orbStill() {   // reduced motion: the orb sits still at its spot, redrawn only when the page moves
