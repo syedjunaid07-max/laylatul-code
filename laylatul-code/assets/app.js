@@ -669,7 +669,7 @@ $('#yr').textContent = new Date().getFullYear();
 /* ---------- the living orb: one companion that travels the whole site ---------- */
 const orbCv = document.createElement('canvas');
 orbCv.className = 'orb-layer'; orbCv.setAttribute('aria-hidden', 'true');
-document.body.appendChild(orbCv);
+stage.insertBefore(orbCv, stage.querySelector('.scrim'));   // inside the hero: above the journey, below the captions
 const oc = orbCv.getContext('2d');
 const orb = { x: innerWidth * 0.72, y: innerHeight * 0.47, vx: 0, vy: 0, R: 40, big: 0, excite: 0, exciteT: 0,
   waves: [], mx: -1, my: -1, trail: [], W: 0, H: 0, pts: [], swarm: [], beams: [], arcs: [], sparks: [], scrollRot: 0, lastSY: scrollY, last: 0, raf: null, anchor: null };
@@ -696,7 +696,7 @@ const orb = { x: innerWidth * 0.72, y: innerHeight * 0.47, vx: 0, vy: 0, R: 40, 
 })();
 function sizeOrb() {
   const dpr = LITE ? Math.min(1.6, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);   // the orb is the star on phones: keep it crisp
-  orb.W = innerWidth; orb.H = innerHeight;
+  orb.W = stage.clientWidth || innerWidth; orb.H = stage.clientHeight || innerHeight;
   orbCv.width = Math.round(orb.W * dpr); orbCv.height = Math.round(orb.H * dpr);
   oc.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -709,7 +709,65 @@ function orbTarget() {
   return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.3 : 0.27) : 0, big: 1, hero: hl, soft: true };
 }
 
+/* the orb artwork: one image cut into three soft-edged rings (core, middle, shell) that turn at their own speeds */
+const orbImg = new Image();
+orbImg.decoding = 'async';
+orbImg.src = LITE ? 'assets/orb-sm.jpg' : 'assets/orb.jpg';
+orbImg.decode().then(() => {
+  const N = orbImg.naturalWidth;
+  // turn the photo's black background see-through: brightness becomes opacity, so only the glowing gold remains
+  const src = document.createElement('canvas'); src.width = src.height = N;
+  const sg = src.getContext('2d', { willReadFrequently: true });
+  sg.drawImage(orbImg, 0, 0, N, N);
+  const im = sg.getImageData(0, 0, N, N), px = im.data, BLACK = 14, K = 255 / (255 - BLACK);
+  for (let i = 0; i < px.length; i += 4) {
+    const r = Math.max(0, px[i] - BLACK) * K, g = Math.max(0, px[i + 1] - BLACK) * K, b = Math.max(0, px[i + 2] - BLACK) * K;
+    const m = Math.max(r, g, b);
+    if (m < 1) { px[i + 3] = 0; continue; }
+    px[i] = r * 255 / m; px[i + 1] = g * 255 / m; px[i + 2] = b * 255 / m; px[i + 3] = m;
+  }
+  sg.putImageData(im, 0, 0);
+  // each band keeps the image where its mask is 1; neighbouring bands cross-fade so, unrotated, they add back up to the original
+  const bands = [[[0, 1], [0.3, 1], [0.38, 0]], [[0.3, 0], [0.38, 1], [0.6, 1], [0.68, 0]], [[0.6, 0], [0.68, 1], [0.94, 1], [1, 0]]];
+  orb.layers = bands.map(stops => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const g = cv.getContext('2d');
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'destination-in';
+    const m = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    stops.forEach(([at, a]) => m.addColorStop(at, `rgba(0,0,0,${a})`));
+    g.fillStyle = m; g.fillRect(0, 0, N, N);
+    return cv;
+  });
+}).catch(() => {});   // if the image fails, the drawn hologram below stays
+
+function drawOrbArt(c, x, y, R, t, ex) {
+  const r = R * 1.08 * (1 + 0.018 * Math.sin(t * 1.9) + 0.04 * ex);   // gentle breathing
+  const rot = orb.scrollRot, spin = orb.spin;
+  c.globalCompositeOperation = 'lighter';
+  // soft golden haze behind it
+  const gR = r * 1.9;
+  let g = c.createRadialGradient(x, y, r * 0.2, x, y, gR);
+  g.addColorStop(0, `rgba(255,150,40,${0.16 + 0.08 * ex})`); g.addColorStop(1, 'rgba(255,110,20,0)');
+  c.globalAlpha = 1; c.fillStyle = g; c.fillRect(x - gR, y - gR, gR * 2, gR * 2);
+  // the three rings: core and shell turn one way, the middle turns the other; all speed up while you scroll
+  const angles = [spin * 1.7 + rot * 0.9 + t * 0.18, -spin * 0.9 - rot * 0.5 - t * 0.09, spin * 0.45 + rot * 0.3 + t * 0.04];
+  const flicker = 0.93 + 0.07 * Math.sin(t * 3.3);
+  orb.layers.forEach((cv, i) => {
+    c.save(); c.translate(x, y); c.rotate(angles[i]);
+    c.globalAlpha = flicker;
+    c.drawImage(cv, -r, -r, r * 2, r * 2);
+    c.restore();
+  });
+  // the core pulses
+  const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
+  g = c.createRadialGradient(x, y, 0, x, y, r * 0.22);
+  g.addColorStop(0, `rgba(255,240,190,${0.35 + 0.35 * pulse})`); g.addColorStop(0.5, `rgba(255,170,60,${0.15 + 0.15 * pulse})`); g.addColorStop(1, 'rgba(255,140,30,0)');
+  c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.22, 0, TAU); c.fill();
+}
+
 function drawOrb(c, x, y, R, t, ex, big) {
+  if (orb.layers) { drawOrbArt(c, x, y, R, t, ex); return; }   // the artwork, once loaded
   const r = R * (1 + 0.025 * Math.sin(t * 2.2) + 0.05 * ex);
   const rot = orb.scrollRot, spin = orb.spin + rot * 0.6;
   const cS = Math.cos(spin), sS = Math.sin(spin), tilt = 0.34, ct = Math.cos(tilt), st = Math.sin(tilt);
