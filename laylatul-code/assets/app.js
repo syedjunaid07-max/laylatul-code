@@ -179,24 +179,6 @@ function sizeCanvas() {
   makeScene();
 }
 
-function boltPoints(x1, y1, x2, y2, rnd, disp) {
-  let pts = [[x1, y1], [x2, y2]];
-  for (let k = 0; k < 5; k++) {
-    const np = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
-      np.push([(ax + bx) / 2 + (rnd() - 0.5) * disp, (ay + by) / 2 + (rnd() - 0.5) * disp], [bx, by]);
-    }
-    pts = np; disp *= 0.55;
-  }
-  return pts;
-}
-function drawBolt(ctx, pts, glow, a, w = 1) {
-  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.globalAlpha = a * 0.3; ctx.lineWidth = 7 * w; ctx.strokeStyle = glow; ctx.stroke();
-  ctx.globalAlpha = a; ctx.lineWidth = 1.5 * w; ctx.strokeStyle = '#fff4e0'; ctx.stroke();
-}
 
 function drawWorldExtras(ctx, w, wt, lp, t, vx, vy, F, trav) {
   const { W, H } = night;
@@ -289,13 +271,6 @@ function drawPortal(ctx, P, p, t, vx, vy, md) {
     ctx.globalAlpha = a * 0.45; ctx.lineWidth = Math.max(1, R * 0.012);
     ctx.beginPath(); ctx.arc(vx, vy, rr, st, st + 1.4); ctx.stroke();
   }
-  // lightning crawling over the rim
-  const rnd = rng(Math.floor(t * 12) * 131 + Math.round(P * 1000));
-  for (let i = 0; i < 3; i++) {
-    const a1 = rnd() * TAU, a2 = a1 + 0.4 + rnd() * 0.6;
-    const pts = boltPoints(vx + Math.cos(a1) * R, vy + Math.sin(a1) * R, vx + Math.cos(a2) * R * 1.04, vy + Math.sin(a2) * R * 1.04, rnd, R * 0.18);
-    drawBolt(ctx, pts, '#ffc070', a * 0.85);
-  }
 }
 
 function drawNight(p, t) {
@@ -363,18 +338,6 @@ function drawNight(p, t) {
     ctx.strokeStyle = tr > 0.02 ? STAR_PAL[Math.round(tr * 4)][hi] : '#ffd8b0';
     ctx.lineWidth = clamp(s.s * 1.3 / zr, 0.5, 3.4);
     ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx + 0.01, hy); ctx.stroke();
-  }
-
-  // 5. lightning: rare at home, constant in transit, wild in the cosmic universe
-  const slot = Math.floor(t * 7), br = rng(slot * 9301 + 7);
-  const chance = 0.05 + 0.22 * tr + 0.4 * wts[3];
-  if (br() < chance) {
-    const edge = br() * 4 | 0, u = br();
-    const sx = edge === 0 ? u * W : edge === 1 ? W : edge === 2 ? u * W : 0;
-    const sy = edge === 0 ? 0 : edge === 1 ? u * H : edge === 2 ? H : u * H;
-    const ex = vx + (br() - 0.5) * md * 0.3, ey = vy + (br() - 0.5) * md * 0.3;
-    const cur = WORLDS.findIndex((w, i) => wts[i] > 0.5);
-    drawBolt(ctx, boltPoints(sx, sy, ex, ey, br, Math.hypot(ex - sx, ey - sy) * 0.22), cur >= 0 ? rgba(WORLDS[cur].h2, 1) : '#ffb050', 0.75 * (1 - settle * 0.6));
   }
 
   // 6. portals between universes
@@ -630,21 +593,17 @@ addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
 
 /* ---------- request builder ---------- */
 const form = $('#bform'), err = $('#err'), done = $('#done'), doneMsg = $('#done-msg');
-const pagesIn = $('#pages'), pagesOut = $('#pages-out'), planSel = $('#plan');
+const planSel = $('#plan');
 const typeMap = { 'Business website': 't-business', 'Online store': 't-store', 'Restaurant or cafe': 't-restaurant', 'Clinic or booking site': 't-booking', 'Portfolio': 't-portfolio', 'Real estate': 't-realestate', 'School or coaching': 't-school', 'Landing page': 't-landing', 'Blog or news': 't-blog', 'Custom web app': 't-app' };
 const featMap = { 'WhatsApp chat button': 'f-whatsapp', 'Online payments': 'f-pay', 'Booking calendar': 'f-cal', 'Photo gallery': 'f-gallery', 'Customer reviews': 'f-reviews', 'Blog': 'f-blog', 'Customer logins': 'f-login', 'Google Maps': 'f-map', 'More than one language': 'f-lang', 'Search engine setup (SEO)': 'f-seo' };
-const pageRects = ['.p2', '.p3', '.p4', '.p5'].map(s => $('#bp ' + s));
 
-function pagesLabel(n) { return n >= 20 ? '20+ pages' : n + (n === 1 ? ' page' : ' pages'); }
 function renderBlueprint() {
   const fd = new FormData(form);
-  const type = fd.get('type'), feats = fd.getAll('feat'), pages = Number(fd.get('pages'));
+  const type = fd.get('type'), feats = fd.getAll('feat');
   const on = new Set();
   if (type) { on.add('g-nav'); if (type !== 'Custom web app') on.add('g-hero'); on.add(typeMap[type]); }
   feats.forEach(f => on.add(featMap[f]));
   $$('#bp .grp').forEach(g => g.classList.toggle('on', [...g.classList].some(c => on.has(c))));
-  [2, 5, 10, 15].forEach((lim, i) => pageRects[i].classList.toggle('on', pages >= lim));
-  pagesOut.textContent = pagesLabel(pages);
   $('#bp-title').textContent = type ? type.toLowerCase().replace(/[^a-z]+/g, '-').replace(/-$/, '') : 'your-website';
   $('#bp-count').textContent = on.size + (on.size === 1 ? ' part' : ' parts');
 }
@@ -658,7 +617,6 @@ function buildMessage(fd) {
     'Hello laylatul-code, I would like a website.',
     'Kind of website: ' + fd.get('type'),
     'Features: ' + (feats.length ? feats.join(', ') : 'Not sure yet'),
-    'Pages: about ' + pagesLabel(Number(fd.get('pages'))),
     'Package: ' + fd.get('plan'),
     'When: ' + fd.get('when'),
     'Name: ' + fd.get('name').trim()
@@ -748,43 +706,6 @@ function heroLive() { return heroBox().bottom > orb.H * 0.55; }
 function orbTarget() {
   const W = orb.W, H = orb.H, narrow = W < 720, hl = heroLive();
   return { x: W / 2, y: H * (narrow ? 0.42 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.3 : 0.27) : 0, big: 1, hero: hl, soft: true };
-}
-const STORM_SECS = $$('main > section, .foot');
-// thunderstorm: as the next section rises into view, lightning from the orb grabs its edge and hauls it up
-function drawStorm(c, t) {
-  const W = orb.W, H = orb.H, pull = clamp(orb.svs * 1.4, 0, 1);
-  for (const el of STORM_SECS) {
-    const top = el.getBoundingClientRect().top, f = top / H;
-    const zone = smoothstep(f, 0.1, 0.28) * (1 - smoothstep(f, 0.92, 1.02));
-    if (zone < 0.03) continue;
-    const I = zone * (0.22 + 0.78 * pull);
-    // the edge being hauled up: a bright seam with a blue glow band
-    const seam = c.createLinearGradient(0, 0, W, 0);
-    seam.addColorStop(0, 'rgba(255,138,31,0)'); seam.addColorStop(0.5, `rgba(255,236,210,${Math.min(1, 1.1 * I)})`); seam.addColorStop(1, 'rgba(255,138,31,0)');
-    c.globalAlpha = 1; c.fillStyle = seam; c.fillRect(0, top - 1.5, W, 3);
-    const glow = c.createLinearGradient(0, top - 70, 0, top + 30);
-    glow.addColorStop(0, 'rgba(255,120,30,0)'); glow.addColorStop(0.7, `rgba(255,120,30,${0.28 * I})`); glow.addColorStop(1, 'rgba(255,120,30,0)');
-    c.fillStyle = glow; c.fillRect(0, top - 70, W, 100);
-    // lightning roots: from the sky down to the edge, forking as they go, with claws where they grip
-    const r = rng(Math.floor(t * 11) * 7919 + Math.round(top / 9));
-    const n = 2 + Math.round(I * 6);
-    for (let i = 0; i < n; i++) {
-      const ex = W * (0.05 + r() * 0.9), sx = ex + (r() - 0.5) * W * 0.35, sy = -20;
-      const pts = boltPoints(sx, sy, ex, top, r, Math.hypot(ex - sx, top - sy) * 0.22);
-      const a = Math.min(1, I * (0.6 + 0.6 * r()));
-      drawBolt(c, pts, '#ff8a1f', a, 1.3);
-      for (let b = 0; b < 3; b++) {   // forks
-        const p = pts[(4 + r() * (pts.length - 8)) | 0], len = 40 + r() * 110, ang = Math.PI * (0.25 + r() * 0.5);
-        drawBolt(c, boltPoints(p[0], p[1], p[0] + Math.cos(ang) * len * (r() < 0.5 ? -1 : 1), p[1] + Math.sin(ang) * len, r, len * 0.3), '#ffb04a', a * 0.7, 0.7);
-      }
-      for (let k = 0; k < 3; k++) {   // claws gripping the edge
-        const kx = ex + (r() - 0.5) * 90;
-        drawBolt(c, boltPoints(ex, top, kx, top - 4 - r() * 16, r, 12), '#ffc070', a * 0.8, 0.8);
-      }
-      c.globalAlpha = a; c.fillStyle = '#fff1dc'; c.beginPath(); c.arc(ex, top, 2.5, 0, TAU); c.fill();   // spark at the grip
-    }
-    if (pull > 0.3 && r() < 0.22) { c.globalAlpha = 0.07 * I; c.fillStyle = '#ff8a1f'; c.fillRect(0, 0, W, H); }
-  }
 }
 
 function drawOrb(c, x, y, R, t, ex, big) {
@@ -880,7 +801,6 @@ function renderOrb(t) {
     });
   }
   if (R > 1.5) drawOrb(oc, x, y, R, t, orb.excite, orb.big);
-  drawStorm(oc, t);
   // sparks shed by the flares, falling as you scroll down
   oc.strokeStyle = '#ffb04a'; oc.lineCap = 'round';
   for (const s of orb.sparks) {
