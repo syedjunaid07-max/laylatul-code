@@ -1467,20 +1467,34 @@ $$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDe
 /* ---------- go ---------- */
 /* ---------- the scroll line and the orb button ---------- */
 // a glowing line on the right edge (with a small orb riding it) replaces the browser's scrollbar; the orb button glides to the next section
-const rail = $('.rail'), railFill = $('.rail-fill'), railOrb = $('.rail-orb'), orbBtn = $('.orb-btn'), finalSec = $('.final');
-let railTick = false, railH = 0, finalTop = 0, btnUp = null, btnGlide = null;
+const rail = $('.rail'), railFill = $('.rail-fill'), railOrb = $('.rail-orb'), railTip = $('.rail-tip'), orbBtn = $('.orb-btn'), finalSec = $('.final');
+let railTouch = false, railTick = false, railH = 0, finalTop = 0, btnUp = null, btnGlide = null, railIdle = 0, railName = '';
+// the section names the line shows while you drag it
+const RAIL_NAMES = [['#problem', 'Heard this before?'], ['#promises', 'Our promises'], ['#types', 'What we build'], ['#how', 'How it works'], ['#prices', 'Prices'], ['#build', 'Your request'], ['#faq', 'FAQ'], ['.final', "Let's start"]];
+let railSecs = [];
+function railLabel() { let n = 'Intro'; for (const [t, name] of railSecs) if (scrollY >= t) n = name; return n; }
 const maxScroll = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
 const docTopOf = el => el.getBoundingClientRect().top + scrollY;
 function updateRail() {
   railTick = false;
   const sp = clamp(scrollY / maxScroll(), 0, 1);
   railFill.style.transform = `scaleY(${sp.toFixed(4)})`;
-  railOrb.style.transform = `translateY(${(sp * railH).toFixed(1)}px)`;
+  const ty = `translateY(${(sp * railH).toFixed(1)}px)`;
+  railOrb.style.translate = `0 ${(sp * railH).toFixed(1)}px`;   // 'translate', not 'transform', so the dot's grow animation doesn't scale its position
+  if (rail.classList.contains('drag')) {   // the label rides beside the dot, naming the section you're dragging through
+    railTip.style.transform = ty;
+    const n = railLabel();
+    if (n !== railName) { railName = n; railTip.firstChild.textContent = n; if (railTouch && navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate(6); }
+    railTip.lastChild.textContent = Math.round(sp * 100) + '%';
+  }
   const up = scrollY + 12 >= Math.min(finalTop, maxScroll() - 8);
   if (up !== btnUp) { btnUp = up; orbBtn.classList.toggle('up', up); orbBtn.setAttribute('aria-label', up ? 'Back to top' : 'Next section'); }
 }
-function sizeRail() { railH = rail.clientHeight; finalTop = docTopOf(finalSec); updateRail(); }
-addEventListener('scroll', () => { if (!railTick) { railTick = true; requestAnimationFrame(updateRail); } }, { passive: true });
+function sizeRail() { railH = rail.clientHeight; finalTop = docTopOf(finalSec); railSecs = RAIL_NAMES.map(([s, n]) => [docTopOf($(s)) - innerHeight * 0.4, n]); updateRail(); }
+addEventListener('scroll', () => {
+  if (!railTick) { railTick = true; requestAnimationFrame(updateRail); }
+  rail.classList.add('moving'); clearTimeout(railIdle); railIdle = setTimeout(() => rail.classList.remove('moving'), 900);   // the line lights up while the page moves
+}, { passive: true });
 addEventListener('resize', () => requestAnimationFrame(sizeRail));
 addEventListener('load', sizeRail);
 function btnStops() {
@@ -1509,14 +1523,22 @@ orbBtn.addEventListener('click', () => {
   if (btnUp) { glideTo(0); return; }
   const s = btnStops(); glideTo(s.length ? s[0] : 0);
 });
-// with a mouse, the line can be dragged like a scrollbar
+// drag the dot to scroll (finger or mouse); with a mouse the whole line also works like a scrollbar
 rail.addEventListener('pointerdown', e => {
-  if (e.pointerType !== 'mouse') return;
-  e.preventDefault(); stopGlide(); cancelBtnGlide(); rail.setPointerCapture(e.pointerId);
-  const go = ev => { const r = rail.getBoundingClientRect(); scrollTo({ top: clamp((ev.clientY - r.top) / r.height, 0, 1) * maxScroll(), behavior: 'instant' }); };
-  const end = () => { rail.removeEventListener('pointermove', go); rail.removeEventListener('pointerup', end); rail.removeEventListener('pointercancel', end); };
-  go(e);
-  rail.addEventListener('pointermove', go); rail.addEventListener('pointerup', end); rail.addEventListener('pointercancel', end);
+  const onDot = !!e.target.closest('.rail-orb'), touch = e.pointerType !== 'mouse';
+  if (touch && !onDot) return;   // on touch only the dot is grabbable, so normal swipes near the edge still scroll
+  e.preventDefault(); stopGlide(); cancelBtnGlide();
+  const cap = onDot ? railOrb : rail; cap.setPointerCapture(e.pointerId);
+  const r = rail.getBoundingClientRect(), dotY = r.top + clamp(scrollY / maxScroll(), 0, 1) * r.height;
+  const off = onDot ? e.clientY - dotY : 0;   // keep the dot under the finger instead of jumping
+  const go = ev => scrollTo({ top: clamp((ev.clientY - off - r.top) / r.height, 0, 1) * maxScroll(), behavior: 'instant' });
+  railName = ''; railTouch = touch; rail.classList.add('drag'); updateRail();
+  if (!onDot) go(e);
+  const end = () => {
+    rail.classList.remove('drag');
+    cap.removeEventListener('pointermove', go); cap.removeEventListener('pointerup', end); cap.removeEventListener('pointercancel', end);
+  };
+  cap.addEventListener('pointermove', go); cap.addEventListener('pointerup', end); cap.addEventListener('pointercancel', end);
 });
 
 if (RM.matches) pinToFinalStates();
