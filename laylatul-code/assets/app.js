@@ -474,7 +474,7 @@ function applyHeroMode() {
 }
 MQLS.forEach(m => m.addEventListener('change', applyHeroMode));
 
-/* ---------- phones: the hero becomes four full-screen pages that snap; captions scroll with the finger ---------- */
+/* ---------- phones: the hero becomes four full-screen pages that scroll freely; captions move with the finger ---------- */
 const PHONE = matchMedia('(max-width: 720px)');
 let phoneOn = false, panelIO = null;
 const PHONE_RESTS = [0, 0.42, 0.74, 1];   // where each page lands in the journey: calm moments between portals
@@ -487,7 +487,6 @@ function setPhoneLayout(on) {
   if (on === phoneOn) return;
   phoneOn = on;
   hero.classList.toggle('phone', on);
-  document.documentElement.classList.toggle('snap', on);
   if (on) {
     panelIO = panelIO || new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('in', e.isIntersecting)), { threshold: 0.35 });
     bands.forEach(b => {
@@ -672,17 +671,37 @@ sizeOrb();
 
 // the orb sits at the centre of the screen behind the whole site; it is the star in the hero and a backdrop elsewhere
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
-function orbTarget() {
+function orbHome() {   // its resting spot on the platform, at the end of the hall
   const W = orb.W, H = orb.H, narrow = W < 720, hl = heroLive();
   return { x: W / 2, y: H * (narrow ? 0.38 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.28 : 0.27) : 0, big: 1, hero: hl, soft: true };
+}
+function heroP() { return scrubOn ? jp(shown) : 1; }   // how far down the hall we are (the still hero shows it landed)
+// the trip: it lifts off the platform, flies ahead of you down the hall weaving through each bay, then lands on the next platform
+function orbTarget() {
+  const T = orbHome(); if (!T.R) return T;
+  const p = heroP(), fl = smoothstep(p, 0.05, 0.16) * (1 - smoothstep(p, 0.84, 0.95));
+  const lift = smoothstep(p, 0.02, 0.1) * (1 - smoothstep(p, 0.88, 0.96));
+  if (fl + lift <= 0) return T;
+  const W = orb.W, H = orb.H, ph = p * TAU, R0 = T.R;
+  if (W < 720) { T.x += fl * W * 0.14 * Math.sin(ph * 2.3); T.y += fl * H * 0.035 * Math.sin(ph * 1.7 + 0.8); }
+  else { T.x += fl * (W * 0.07 + W * 0.09 * Math.sin(ph * 2.3)); T.y += fl * H * 0.08 * Math.sin(ph * 1.7 + 0.8); }   // keeps clear of the captions on the left
+  T.y -= lift * R0 * 0.22;
+  T.R = R0 * (1 - 0.2 * fl + 0.06 * fl * Math.sin(ph * 3.1));   // a little smaller in flight: it is ahead of you
+  return T;
+}
+// the platform's distance: 1 at rest; it slides under you as you leave, and the next one rises out of the far end as you arrive
+function stationAt(p) {
+  if (p < 0.5) return { z: 1 - 0.68 * smoothstep(p, 0.06, 0.22), a: 1 - smoothstep(p, 0.13, 0.21) };
+  return { z: 1 + 7 * (1 - smoothstep(p, 0.8, 0.95)), a: smoothstep(p, 0.78, 0.86) };
 }
 
 /* the projector the orb floats above: a dark platform with turning light rings, a beam rising into the orb, and a halo ring overhead.
    It stays put while the orb drifts. */
-function drawPedestal(c, R, t) {
-  const T = orbTarget(), A = clamp((R - 8) / 80, 0, 1);
-  if (!T.R || A <= 0) return;
-  const narrow = orb.W < 720, x = T.x, lw = Math.max(1, R / 170);
+function drawPedestal(c, Rnow, t) {
+  const T = orbHome(), st = stationAt(heroP()), A = clamp((Rnow - 8) / 80, 0, 1) * st.a;
+  if (!T.R || A <= 0.005) return;
+  const R = T.R, narrow = orb.W < 720, x = T.x, lw = Math.max(1, R / 170);
+  c.save(); c.translate(T.x, T.y); c.scale(1 / st.z, 1 / st.z); c.translate(-T.x, -T.y);   // the hall's perspective: far = small, near the vanishing point
   const rx = R * (narrow ? 1.0 : 1.3), ry = rx * 0.17, yb = T.y + R * (narrow ? 1.12 : 1.32), th = ry * 0.45;
 
   // the beam rising from the platform into the orb
@@ -728,6 +747,7 @@ function drawPedestal(c, R, t) {
   c.strokeStyle = '#ff9a2e'; c.globalAlpha = 0.55 * A; c.lineWidth = lw;
   c.beginPath(); c.ellipse(x, yh, hx * 1.18, hy * 1.18, 0, 0, TAU); c.stroke();
   c.setLineDash([]);
+  c.restore();
 }
 
 /* the orb artwork: one image cut into three soft-edged rings (core, middle, shell) that turn at their own speeds */
@@ -1014,12 +1034,12 @@ function renderOrb(t) {
   oc.clearRect(0, 0, orb.W, orb.H);
   const { x, y, R } = orb, sp = Math.hypot(orb.vx, orb.vy);
   oc.globalCompositeOperation = 'lighter';
-  if (sp > 1.5) {
-    oc.fillStyle = '#ff9a2e';
-    orb.trail.forEach(([px, py], i) => {
-      const a = i / orb.trail.length, s = Math.max(1, R * 0.06 * a);
-      oc.globalAlpha = a * 0.5 * Math.min(1, sp / 12); oc.fillRect(px - s / 2, py - s / 2, s, s);
-    });
+  if (sp > 0.4 && R > 6) {   // a comet tail of light behind it while it flies
+    const n = orb.trail.length, k = Math.min(1, sp / 6);
+    for (let i = 0; i < n - 1; i++) {
+      const [px, py] = orb.trail[i], a = i / n, s = R * (0.3 + 0.6 * a);
+      oc.globalAlpha = a * a * 0.4 * k; oc.drawImage(glint, px - s, py - s, s * 2, s * 2);
+    }
   }
   if (R > 1.5) { drawPedestal(oc, R, t); drawFeed(oc, x, y, R, t); drawOrb(oc, x, y, R, t, orb.excite, orb.big); drawFeedFlashes(oc, x, y, R, t); }
   // sparks shed by the flares, falling as you scroll down
@@ -1399,8 +1419,63 @@ function startGlide() {
 $$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); startGlide(); }));
 
 /* ---------- go ---------- */
+/* ---------- the scroll line and the orb button ---------- */
+// a glowing line on the right edge (with a small orb riding it) replaces the browser's scrollbar; the orb button glides to the next section
+const rail = $('.rail'), railFill = $('.rail-fill'), railOrb = $('.rail-orb'), orbBtn = $('.orb-btn'), finalSec = $('.final');
+let railTick = false, railH = 0, finalTop = 0, btnUp = null, btnGlide = null;
+const maxScroll = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
+const docTopOf = el => el.getBoundingClientRect().top + scrollY;
+function updateRail() {
+  railTick = false;
+  const sp = clamp(scrollY / maxScroll(), 0, 1);
+  railFill.style.transform = `scaleY(${sp.toFixed(4)})`;
+  railOrb.style.transform = `translateY(${(sp * railH).toFixed(1)}px)`;
+  const up = scrollY + 12 >= Math.min(finalTop, maxScroll() - 8);
+  if (up !== btnUp) { btnUp = up; orbBtn.classList.toggle('up', up); orbBtn.setAttribute('aria-label', up ? 'Back to top' : 'Next section'); }
+}
+function sizeRail() { railH = rail.clientHeight; finalTop = docTopOf(finalSec); updateRail(); }
+addEventListener('scroll', () => { if (!railTick) { railTick = true; requestAnimationFrame(updateRail); } }, { passive: true });
+addEventListener('resize', () => requestAnimationFrame(sizeRail));
+addEventListener('load', sizeRail);
+function btnStops() {
+  const stops = [], range = HM.h - innerHeight;
+  if (phoneOn && scrubOn) HM.pt.slice(1).forEach(t => stops.push(HM.top + t));              // each hero page
+  else if (scrubOn) [0.40, 0.70, 0.97].forEach(p => stops.push(HM.top + p * range));         // each caption in the hall
+  $$('main > section').forEach(s => stops.push(docTopOf(s)));
+  return stops.map(y => Math.min(y, maxScroll())).filter(y => y > scrollY + 12);
+}
+function cancelBtnGlide() { if (btnGlide !== null) { cancelAnimationFrame(btnGlide); btnGlide = null; document.documentElement.classList.remove('gliding'); } }
+function glideTo(y) {
+  stopGlide(); cancelBtnGlide();
+  if (RM.matches) { scrollTo({ top: y, behavior: 'auto' }); return; }
+  const from = scrollY, dist = y - from, ms = clamp(Math.abs(dist) / innerHeight * 380, 650, 1800), t0 = performance.now();
+  const ease = x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  document.documentElement.classList.add('gliding');
+  const step = now => {
+    const x = Math.min(1, (now - t0) / ms);
+    scrollTo({ top: from + dist * ease(x), behavior: 'instant' });
+    if (x < 1) btnGlide = requestAnimationFrame(step); else { btnGlide = null; document.documentElement.classList.remove('gliding'); }
+  };
+  btnGlide = requestAnimationFrame(step);
+  setTimeout(() => ['wheel', 'touchstart'].forEach(ev => addEventListener(ev, cancelBtnGlide, { passive: true, once: true })), 50);
+}
+orbBtn.addEventListener('click', () => {
+  if (btnUp) { glideTo(0); return; }
+  const s = btnStops(); glideTo(s.length ? s[0] : 0);
+});
+// with a mouse, the line can be dragged like a scrollbar
+rail.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse') return;
+  e.preventDefault(); stopGlide(); cancelBtnGlide(); rail.setPointerCapture(e.pointerId);
+  const go = ev => { const r = rail.getBoundingClientRect(); scrollTo({ top: clamp((ev.clientY - r.top) / r.height, 0, 1) * maxScroll(), behavior: 'instant' }); };
+  const end = () => { rail.removeEventListener('pointermove', go); rail.removeEventListener('pointerup', end); rail.removeEventListener('pointercancel', end); };
+  go(e);
+  rail.addEventListener('pointermove', go); rail.addEventListener('pointerup', end); rail.addEventListener('pointercancel', end);
+});
+
 if (RM.matches) pinToFinalStates();
 applyHeroMode();
+sizeRail();
 sectionDrive();
 navState();
 })();

@@ -347,7 +347,7 @@ html.cursor-on input:not([type="range"]):not([type="radio"]):not([type="checkbox
   .h-blur .sharp{transform:translateY(calc((1 - var(--k,0))*10px))}
 }
 
-/* phones: the hero is four full-screen pages over the pinned journey, and the page snaps page by page */
+/* phones: the hero is four full-screen pages over the pinned journey; the page scrolls freely, no snapping */
 .hero.phone{height:auto}
 .hero.phone .stage{margin-bottom:-100vh;margin-bottom:-100svh}
 .hero.phone .cue{display:none}
@@ -362,3 +362,29 @@ html.snap main > section,html.snap .foot{scroll-snap-align:start}
 .btn-explore svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;animation:nudge 2.4s var(--ease-io) infinite}
 @keyframes nudge{50%{transform:translateY(4px)}}
 html.gliding,html.gliding body{scroll-snap-type:none!important}
+
+/* the scroll line: replaces the browser's scrollbar with a glowing track and a small orb riding it */
+html{scrollbar-width:none}
+html::-webkit-scrollbar{display:none}
+.rail{position:fixed;top:14px;bottom:14px;right:5px;width:3px;z-index:60;border-radius:3px;background:rgba(255,138,31,.13);cursor:pointer;touch-action:none}
+.rail::before{content:"";position:absolute;inset:0 -7px}   /* a wider grab area */
+.rail-fill{position:absolute;inset:0;border-radius:3px;transform-origin:50% 0;transform:scaleY(0);background:linear-gradient(180deg,rgba(255,138,31,.15),#ff8a1f 55%,#ffd27a);box-shadow:0 0 10px rgba(255,150,40,.6)}
+.rail-orb{position:absolute;left:50%;top:0;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:radial-gradient(circle,#fff6dc 0 16%,#ffc061 34%,rgba(255,138,31,.55) 52%,rgba(255,138,31,0) 72%);box-shadow:0 0 12px 3px rgba(255,140,30,.45);will-change:transform}
+.rail-orb::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1px dashed rgba(255,190,100,.7);animation:orbspin 6s linear infinite}
+@media (pointer:coarse){.rail{right:3px;width:2px;pointer-events:none}}
+
+/* the orb button: a small spinning orb that glides to the next section, and back to the top at the end */
+.orb-btn{position:fixed;right:18px;bottom:18px;z-index:60;width:56px;height:56px;padding:0;border:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;background:#070504;box-shadow:0 0 0 1px rgba(255,138,31,.5),0 0 24px rgba(255,138,31,.35),0 6px 18px rgba(0,0,0,.6);transition:box-shadow .3s,transform .3s var(--ease-out)}
+.orb-btn::before{content:"";position:absolute;inset:-4px;border-radius:50%;background:conic-gradient(from 0deg,rgba(255,138,31,0),#ffb347 20%,rgba(255,138,31,0) 40%,rgba(255,138,31,0) 60%,#ffd27a 80%,rgba(255,138,31,0));-webkit-mask:radial-gradient(circle,transparent 63%,#000 65%);mask:radial-gradient(circle,transparent 63%,#000 65%);animation:orbspin 3.5s linear infinite}
+.orb-btn-art{position:absolute;inset:2px;border-radius:50%;background:url(orb-sm.jpg) center/122% no-repeat;animation:orbspin 16s linear infinite reverse}
+.orb-btn::after{content:"";position:absolute;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle,rgba(8,5,3,.85) 55%,rgba(8,5,3,0) 100%)}
+.orb-btn svg{position:relative;z-index:1;width:18px;height:18px;fill:none;stroke:#fff3dd;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:rotate .4s var(--ease-out)}
+.orb-btn.up svg{rotate:180deg}
+.orb-btn:hover{transform:scale(1.07);box-shadow:0 0 0 1px rgba(255,170,70,.8),0 0 34px rgba(255,138,31,.6),0 6px 18px rgba(0,0,0,.6)}
+.orb-btn:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+@keyframes orbspin{to{rotate:360deg}}
+@media (max-width:720px){.orb-btn{right:14px;bottom:14px;width:50px;height:50px}}
+@media (prefers-reduced-motion:reduce){.orb-btn::before,.orb-btn-art,.rail-orb::after{animation:none}}
+/* keep the corner clear for the orb button */
+@media (min-width:721px){.hud{right:max(var(--gut),92px)}.foot{padding-right:max(var(--gut),96px)}}
+@media (max-width:720px){.foot{padding-bottom:88px}}
