@@ -134,6 +134,42 @@ function hudIndex(p) { if (p < PORTALS[0]) return 0; if (p >= PORTALS[4]) return
 
 const night = { ctx: null, W: 0, H: 0, parts: [], stars: [], sky: null, cyan: null, vel: 0 };
 
+// the opening scene: a photo of the hall with its halo rig and platform (text, cards and the old orb removed).
+// The live orb sits exactly where the photo's orb was; as you fly off, the photo gives way to the drawn hall, and it returns as you land.
+const PLATE = { img: null, fade: null, fadeKey: '' };
+const PLATE_A = 1808 / 870, PLATE_ORB = [1166 / 870, 400 / 870], PLATE_R = 300 / 870;   // in units of the photo's height
+(() => {
+  const im = new Image(); im.decoding = 'async';
+  im.src = LITE ? 'assets/hall-plate-sm.jpg' : 'assets/hall-plate.jpg';
+  im.decode().then(() => { PLATE.img = im; if (!scrubOn) drawStatic(); }).catch(() => {});
+})();
+function plateFit(W, H) {
+  const wide = W / H > 1.15;
+  let Hd, ox, oy;
+  if (wide) { Hd = Math.max(H, W / PLATE_A); ox = (W - Hd * PLATE_A) / 2; oy = (H - Hd) / 2; }   // covers the screen; the orb lands right of centre, clear of the captions
+  else { Hd = Math.min(W * 1.074, H * 0.6); ox = W / 2 - PLATE_ORB[0] * Hd; oy = H * (W < 720 ? 0.38 : 0.42) - PLATE_ORB[1] * Hd; }   // a band around the orb
+  return { wide, Hd, Wd: Hd * PLATE_A, ox, oy, x: ox + PLATE_ORB[0] * Hd, y: oy + PLATE_ORB[1] * Hd, R: PLATE_R * Hd * 0.92 };
+}
+function plateImage(f) {   // on tall screens the photo is a band, so its top and bottom fade into the hall
+  if (f.wide) return PLATE.img;
+  const key = Math.round(f.Wd) + 'x' + Math.round(f.Hd);
+  if (PLATE.fadeKey !== key) {
+    const c = document.createElement('canvas'); c.width = Math.round(f.Wd); c.height = Math.round(f.Hd);
+    const g = c.getContext('2d'); g.drawImage(PLATE.img, 0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in';
+    const lg = g.createLinearGradient(0, 0, 0, c.height);
+    lg.addColorStop(0, 'rgba(0,0,0,0)'); lg.addColorStop(0.16, '#000'); lg.addColorStop(0.84, '#000'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = lg; g.fillRect(0, 0, c.width, c.height);
+    PLATE.fade = c; PLATE.fadeKey = key;
+  }
+  return PLATE.fade;
+}
+// how much of the photo shows: all of it at rest, fading out (and pushing in) as you fly off, back again as you land
+function plateAt(p) {
+  if (p < 0.5) return { a: 1 - smoothstep(p, 0.07, 0.2), z: 1 + 0.45 * smoothstep(p, 0.02, 0.2) };
+  return { a: smoothstep(p, 0.82, 0.96), z: 0.72 + 0.28 * smoothstep(p, 0.82, 0.97) };
+}
+
 function sprite(inner, outer) {
   const c = document.createElement('canvas'); c.width = c.height = 32;
   const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
@@ -281,19 +317,20 @@ function drawNight(p, t) {
   const { ctx, W, H } = night;
   if (!ctx) return;
   const wide = W / H > 1.15;
-  const vx = W * 0.5, vy = H * (W < 720 ? 0.38 : 0.5);   // the vanishing point sits on the orb
+  const fit = plateFit(W, H), vx = fit.x, vy = fit.y;   // the vanishing point sits on the orb's home
   const md = Math.min(W, H), F = md * 0.55;
   const tr = transitAt(p), base = travelAt(p);
   const cz = (base + t * (0.05 + 0.35 * tr)) * HALL.KZ;
   const wts = WORLDS.map(w => worldWeight(w, p));
   const settle = smoothstep(p, 0.84, 0.97);
+  const pl = plateAt(p), covered = PLATE.img && fit.wide && pl.a > 0.999 && pl.z >= 1;   // the photo fills the screen: skip the hall behind it
 
   // 1. the hall's darkness, warmed a little differently in each bay
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#060404'); bg.addColorStop(0.55, '#0a0605'); bg.addColorStop(1, '#0e0806');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  WORLDS.forEach((w, i) => {
+  if (!covered) WORLDS.forEach((w, i) => {
     if (wts[i] <= 0) return;
     const g = ctx.createRadialGradient(vx, vy, 0, vx, vy, Math.hypot(W, H) * 0.7);
     g.addColorStop(0, rgba(w.c0, 1)); g.addColorStop(1, rgba(w.c1, 0));
@@ -301,11 +338,19 @@ function drawNight(p, t) {
   });
 
   // 2. the hall itself
-  drawHall(ctx, t, vx, vy, F, cz, wide, md);
+  if (!covered) drawHall(ctx, t, vx, vy, F, cz, wide, md);
 
-  // 3. gates at each bay
+  // 2b. the photo of the hall, at rest and on landing
+  if (PLATE.img && pl.a > 0.004) {
+    ctx.save(); ctx.translate(vx, vy); ctx.scale(pl.z, pl.z); ctx.translate(-vx, -vy);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = pl.a;
+    ctx.drawImage(plateImage(fit), fit.ox, fit.oy, fit.Wd, fit.Hd);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // 3. gates at each bay (never over the photo)
   ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < PORTALS.length; i++) { const P = PORTALS[i], ga = smoothstep(p, P - 0.1, P - 0.06); if (ga > 0) drawGate(ctx, (travelAt(P) - base) * HALL.KZ + 0.12, t, vx, vy, F, wide, i, ga); }
+  for (let i = 0; i < PORTALS.length; i++) { const P = PORTALS[i], ga = smoothstep(p, P - 0.1, P - 0.06) * (PLATE.img ? 1 - pl.a : 1); if (ga > 0) drawGate(ctx, (travelAt(P) - base) * HALL.KZ + 0.12, t, vx, vy, F, wide, i, ga); }
 
   // 4. dust: drifting motes at rest, light streaks while flying
   const HW = hallHW(wide), len = 0.015 + tr * (0.18 + Math.min(night.vel * 14, 2.5));
@@ -671,9 +716,9 @@ sizeOrb();
 
 // the orb sits at the centre of the screen behind the whole site; it is the star in the hero and a backdrop elsewhere
 function heroLive() { return heroBox().bottom > orb.H * 0.55; }
-function orbHome() {   // its resting spot on the platform, at the end of the hall
-  const W = orb.W, H = orb.H, narrow = W < 720, hl = heroLive();
-  return { x: W / 2, y: H * (narrow ? 0.38 : 0.5), R: hl ? Math.min(W, H) * (narrow ? 0.28 : 0.27) : 0, big: 1, hero: hl, soft: true };
+function orbHome() {   // its resting spot: exactly where the photo's orb was, between the halo rig and the platform
+  const hl = heroLive(), f = plateFit(orb.W, orb.H);
+  return { x: f.x, y: f.y, R: hl ? f.R : 0, big: 1, hero: hl, soft: true, wide: f.wide };
 }
 function heroP() { return scrubOn ? jp(shown) : 1; }   // how far down the hall we are (the still hero shows it landed)
 // the trip: it lifts off the platform, flies ahead of you down the hall weaving through each bay, then lands on the next platform
@@ -683,8 +728,8 @@ function orbTarget() {
   const lift = smoothstep(p, 0.02, 0.1) * (1 - smoothstep(p, 0.88, 0.96));
   if (fl + lift <= 0) return T;
   const W = orb.W, H = orb.H, ph = p * TAU, R0 = T.R;
-  if (W < 720) { T.x += fl * W * 0.14 * Math.sin(ph * 2.3); T.y += fl * H * 0.035 * Math.sin(ph * 1.7 + 0.8); }
-  else { T.x += fl * (W * 0.07 + W * 0.09 * Math.sin(ph * 2.3)); T.y += fl * H * 0.08 * Math.sin(ph * 1.7 + 0.8); }   // keeps clear of the captions on the left
+  if (!T.wide) { T.x += fl * W * 0.14 * Math.sin(ph * 2.3); T.y += fl * H * 0.035 * Math.sin(ph * 1.7 + 0.8); }
+  else { T.x += fl * (W * 0.6 - T.x) + fl * W * 0.08 * Math.sin(ph * 2.3); T.y += fl * H * 0.08 * Math.sin(ph * 1.7 + 0.8); }   // weaves right of the captions
   T.y -= lift * R0 * 0.22;
   T.R = R0 * (1 - 0.2 * fl + 0.06 * fl * Math.sin(ph * 3.1));   // a little smaller in flight: it is ahead of you
   return T;
@@ -698,6 +743,7 @@ function stationAt(p) {
 /* the projector the orb floats above: a dark platform with turning light rings, a beam rising into the orb, and a halo ring overhead.
    It stays put while the orb drifts. */
 function drawPedestal(c, Rnow, t) {
+  if (PLATE.img) return;   // the photo has the real platform and halo rig
   const T = orbHome(), st = stationAt(heroP()), A = clamp((Rnow - 8) / 80, 0, 1) * st.a;
   if (!T.R || A <= 0.005) return;
   const R = T.R, narrow = orb.W < 720, x = T.x, lw = Math.max(1, R / 170);
