@@ -666,17 +666,89 @@ $('#copy').addEventListener('click', async () => {
 $$('.type').forEach(t => t.addEventListener('click', () => {
   const r = $(`#type-chips input[value="${t.dataset.type}"]`);
   if (r) { r.checked = true; renderBlueprint(); }
-  $('#build').scrollIntoView({ behavior: RM.matches ? 'auto' : 'smooth' });
+  openReq(t);
 }));
 $$('.pick').forEach(b => b.addEventListener('click', () => {
   planSel.value = b.dataset.plan; renderBlueprint();
-  $('#build').scrollIntoView({ behavior: RM.matches ? 'auto' : 'smooth' });
+  openReq(b);
 }));
 
 const wa = $('.wa-link');
 wa.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent('Hello laylatul-code, I have a question about a website.');
 wa.target = '_blank'; wa.rel = 'noopener';
 $('#yr').textContent = new Date().getFullYear();
+
+/* ---------- the request window: "Start your request" floats the builder up over the page ---------- */
+// The same builder moves into the window and back, so choices made in either place are kept.
+const reqEl = $('#req'), reqPanel = $('.req-panel'), reqBody = $('.req-body'), builder = $('.builder'), builderHome = builder.parentNode, reqStay = $('.req-stay');
+let reqOn = false, reqOpener = null, reqSettle = 0, reqFin = 0;
+const STAY_TEXT = $('#stay-p').textContent;
+function openReq(from) {
+  if (reqOn) return;
+  reqOn = true; reqOpener = from || document.activeElement;
+  stopGlide(); cancelBtnGlide();
+  clearTimeout(reqFin); reqEl.classList.remove('closing');
+  // fly out of the button that was pressed
+  const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : null;
+  reqPanel.style.setProperty('--dx', (r ? r.left + r.width / 2 - innerWidth / 2 : 0) + 'px');
+  reqPanel.style.setProperty('--dy', (r ? r.top + r.height / 2 - innerHeight / 2 : 60) + 'px');
+  reqBody.appendChild(builder);
+  reqStay.hidden = true;
+  reqPanel.classList.remove('settled', 'nudge');
+  reqEl.hidden = false;
+  document.documentElement.classList.add('req-open');
+  reqBody.scrollTop = 0;
+  reqPanel.focus({ preventScroll: true });
+  clearTimeout(reqSettle); reqSettle = setTimeout(() => { if (reqOn) reqPanel.classList.add('settled'); }, 850);
+}
+function closeReq() {
+  if (!reqOn) return;
+  reqOn = false; clearTimeout(reqSettle);
+  reqPanel.classList.remove('settled', 'nudge');
+  reqEl.classList.add('closing');
+  const fin = () => {
+    reqEl.hidden = true; reqEl.classList.remove('closing'); reqStay.hidden = true;
+    builderHome.appendChild(builder);
+    document.documentElement.classList.remove('req-open');
+    if (reqOpener && reqOpener.focus) reqOpener.focus({ preventScroll: true });
+  };
+  if (RM.matches) fin(); else reqFin = setTimeout(fin, 430);
+}
+// closing asks once more, with a reason to stay; after the request is sent it just closes
+function askClose() {
+  if (!$('#done').hidden) { closeReq(); return; }
+  if (!reqStay.hidden) return;
+  const type = new FormData(form).get('type'), n = parseInt($('#bp-count').textContent, 10) || 0;
+  $('#stay-p').textContent = type
+    ? `Your ${type.toLowerCase()} sketch already has ${n} part${n === 1 ? '' : 's'}. Send it now, and within one working day you get a fixed price and a launch date, in writing.`
+    : STAY_TEXT;
+  reqStay.hidden = false;
+  reqPanel.classList.remove('settled', 'nudge'); void reqPanel.offsetWidth; reqPanel.classList.add('nudge');
+  setTimeout(() => { if (reqOn && reqPanel.classList.contains('nudge')) { reqPanel.classList.remove('nudge'); reqPanel.classList.add('settled'); } }, 520);
+  $('[data-stay]').focus({ preventScroll: true });
+}
+function keepBuilding() {
+  reqStay.hidden = true;
+  const first = $('input:checked', builder) || $('input', builder);
+  if (first) first.focus({ preventScroll: true });
+}
+$$('a[href="#build"]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); openReq(a); }));
+$$('[data-close]', reqEl).forEach(b => b.addEventListener('click', askClose));
+$('[data-stay]').addEventListener('click', keepBuilding);
+$('[data-leave]').addEventListener('click', closeReq);
+document.addEventListener('keydown', e => {
+  if (!reqOn) return;
+  if (e.key === 'Escape') { e.preventDefault(); if (reqStay.hidden) askClose(); else keepBuilding(); return; }
+  if (e.key !== 'Tab') return;
+  // keep the keyboard inside the window (or inside the card while it shows)
+  const scope = reqStay.hidden ? reqPanel : reqStay;
+  const f = $$('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])', scope).filter(el => !el.disabled && el.offsetParent !== null && !(reqStay.hidden && reqStay.contains(el)));
+  if (!f.length) return;
+  const i = f.indexOf(document.activeElement);
+  if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && (i === f.length - 1 || i === -1)) { e.preventDefault(); f[0].focus(); }
+});
+
 
 /* ---------- the living orb: one companion that travels the whole site ---------- */
 const orbCv = document.createElement('canvas');
@@ -1468,7 +1540,7 @@ $$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDe
 /* ---------- the scroll line and the orb button ---------- */
 // a glowing line on the right edge (with a small orb riding it) replaces the browser's scrollbar; the orb button glides to the next section
 const rail = $('.rail'), railFill = $('.rail-fill'), railOrb = $('.rail-orb'), railTip = $('.rail-tip'), orbBtn = $('.orb-btn'), finalSec = $('.final');
-let railTouch = false, railTick = false, railH = 0, finalTop = 0, btnUp = null, btnGlide = null, railIdle = 0, railName = '';
+let railLastY = scrollY, railTouch = false, railTick = false, railH = 0, finalTop = 0, btnUp = null, btnGlide = null, railIdle = 0, railName = '';
 // the section names the line shows while you drag it
 const RAIL_NAMES = [['#problem', 'Heard this before?'], ['#promises', 'Our promises'], ['#types', 'What we build'], ['#how', 'How it works'], ['#prices', 'Prices'], ['#build', 'Your request'], ['#faq', 'FAQ'], ['.final', "Let's start"]];
 let railSecs = [];
@@ -1493,6 +1565,7 @@ function updateRail() {
 function sizeRail() { railH = rail.clientHeight; finalTop = docTopOf(finalSec); railSecs = RAIL_NAMES.map(([s, n]) => [docTopOf($(s)) - innerHeight * 0.4, n]); updateRail(); }
 addEventListener('scroll', () => {
   if (!railTick) { railTick = true; requestAnimationFrame(updateRail); }
+  const dirUp = scrollY < railLastY; railLastY = scrollY; if (dirUp !== rail.classList.contains('up')) rail.classList.toggle('up', dirUp);
   rail.classList.add('moving'); clearTimeout(railIdle); railIdle = setTimeout(() => rail.classList.remove('moving'), 900);   // the line lights up while the page moves
 }, { passive: true });
 addEventListener('resize', () => requestAnimationFrame(sizeRail));

@@ -315,7 +315,36 @@
   <p class="mono small">&copy; <span id="yr">2026</span> laylatul-code. Any website you can picture.</p>
 </footer>
 
-<div class="rail" aria-hidden="true"><i class="rail-fill"></i><b class="rail-orb"></b><span class="rail-tip"><span>Intro</span><b>0%</b></span></div>
+<div class="req" id="req" hidden>
+  <div class="req-backdrop" data-close></div>
+  <div class="req-panel" role="dialog" aria-modal="true" aria-labelledby="req-title" tabindex="-1">
+    <button class="req-x" type="button" aria-label="Close" data-close><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="req-body">
+      <div class="req-head">
+        <p class="label">Start your request</p>
+        <h2 id="req-title">Build your request.</h2>
+        <p class="lede">Choose what you need and watch your site take shape. Then send it to us on WhatsApp or email.</p>
+      </div>
+    </div>
+    <div class="req-stay" role="alertdialog" aria-modal="true" aria-labelledby="stay-h" aria-describedby="stay-p" hidden>
+      <div class="stay-card">
+        <div class="stay-orb" aria-hidden="true"></div>
+        <h3 id="stay-h">Leaving? Your website is two minutes away.</h3>
+        <p id="stay-p">Tell us what you need now, and within one working day you get a fixed price and a launch date, in writing. Asking costs nothing.</p>
+        <ul class="stay-list">
+          <li>Websites from &#8377;9,999, the price fixed before we start</li>
+          <li>Watch it being built on your own preview link</li>
+          <li>Domain, hosting and code in your name. No buyout fees, ever.</li>
+        </ul>
+        <div class="stay-row">
+          <button class="btn" type="button" data-stay>Keep building</button>
+          <button class="btn btn-ghost" type="button" data-leave>Leave anyway</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="rail" aria-hidden="true"><i class="rail-fill"></i><b class="rail-orb"><svg viewBox="-20 -20 40 40"><polygon class="ro-ring" points="0,-16 13.86,-8 13.86,8 0,16 -13.86,8 -13.86,-8"/><polygon class="ro-hex" points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5"/><polygon class="ro-core" points="0,-5.5 4,0 0,5.5 -4,0"/><g class="ro-orbit"><circle r="1.7" cx="0" cy="-16"/><circle r="1.2" cx="0" cy="16"/></g></svg><i class="ro-tail"></i></b><span class="rail-tip"><span>Intro</span><b>0%</b></span></div>
 <button class="orb-btn" type="button" aria-label="Next section"><span class="orb-btn-art" aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
 <script src="assets/app.js?v=dev"></script>
 </body>
