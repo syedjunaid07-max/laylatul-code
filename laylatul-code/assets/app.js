@@ -1559,8 +1559,8 @@ function updateRail() {
     if (n !== railName) { railName = n; railTip.firstChild.textContent = n; if (railTouch && navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate(6); }
     railTip.lastChild.textContent = Math.round(sp * 100) + '%';
   }
-  const up = scrollY + 12 >= Math.min(finalTop, maxScroll() - 8);
-  if (up !== btnUp) { btnUp = up; orbBtn.classList.toggle('up', up); orbBtn.setAttribute('aria-label', up ? 'Back to top' : 'Next section'); }
+  const show = scrollY > innerHeight * 0.9;   // the orb button only takes you back up, so it appears once you've come down a way
+  if (show !== btnUp) { btnUp = show; orbBtn.classList.toggle('show', show); orbBtn.tabIndex = show ? 0 : -1; orbBtn.setAttribute('aria-hidden', show ? 'false' : 'true'); }
 }
 function sizeRail() { railH = rail.clientHeight; finalTop = docTopOf(finalSec); railSecs = RAIL_NAMES.map(([s, n]) => [docTopOf($(s)) - innerHeight * 0.4, n]); updateRail(); }
 addEventListener('scroll', () => {
@@ -1570,13 +1570,6 @@ addEventListener('scroll', () => {
 }, { passive: true });
 addEventListener('resize', () => requestAnimationFrame(sizeRail));
 addEventListener('load', sizeRail);
-function btnStops() {
-  const stops = [], range = HM.h - innerHeight;
-  if (phoneOn && scrubOn) HM.pt.slice(1).forEach(t => stops.push(HM.top + t));              // each hero page
-  else if (scrubOn) [0.40, 0.70, 0.97].forEach(p => stops.push(HM.top + p * range));         // each caption in the hall
-  $$('main > section').forEach(s => stops.push(docTopOf(s)));
-  return stops.map(y => Math.min(y, maxScroll())).filter(y => y > scrollY + 12);
-}
 function cancelBtnGlide() { if (btnGlide !== null) { cancelAnimationFrame(btnGlide); btnGlide = null; document.documentElement.classList.remove('gliding'); } }
 function glideTo(y) {
   stopGlide(); cancelBtnGlide();
@@ -1593,8 +1586,8 @@ function glideTo(y) {
   setTimeout(() => ['wheel', 'touchstart'].forEach(ev => addEventListener(ev, cancelBtnGlide, { passive: true, once: true })), 50);
 }
 orbBtn.addEventListener('click', () => {
-  if (btnUp) { glideTo(0); return; }
-  const s = btnStops(); glideTo(s.length ? s[0] : 0);
+  orbBtn.classList.remove('launch'); void orbBtn.offsetWidth; orbBtn.classList.add('launch');   // the arrow shoots up as you take off
+  glideTo(0);
 });
 // drag the dot to scroll (finger or mouse); with a mouse the whole line also works like a scrollbar
 rail.addEventListener('pointerdown', e => {
