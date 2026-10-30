@@ -498,7 +498,7 @@ html.req-open{overflow:hidden}
 }
 
 /* our work: real sites, each a card with a screenshot in a little browser frame */
-.work-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:clamp(18px,2.4vw,28px)}
+.work-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:clamp(18px,2.4vw,28px)}
 .work-card{position:relative;display:flex;flex-direction:column;border-radius:22px;overflow:hidden;text-decoration:none;color:inherit;background:linear-gradient(180deg,rgba(26,16,9,.92),rgba(11,8,6,.96));box-shadow:0 0 0 1px var(--line);transition:transform .45s var(--ease-out),box-shadow .45s}
 .work-card:hover,.work-card:focus-visible{transform:translateY(-6px);box-shadow:0 0 0 1px rgba(255,138,31,.6),0 18px 50px rgba(0,0,0,.5),0 0 40px rgba(255,138,31,.18);outline:none}
 .work-shot{position:relative;margin:14px 14px 0;border-radius:12px 12px 4px 4px;overflow:hidden;background:#0b0806;box-shadow:0 0 0 1px rgba(255,138,31,.22)}
