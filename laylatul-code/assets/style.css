@@ -460,7 +460,7 @@ html.req-open{overflow:hidden}
 .req-x:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* the "don't go yet" card */
-.req-stay{position:absolute;inset:0;z-index:4;display:grid;place-items:center;padding:56px 20px 20px;overflow:auto;border-radius:inherit;background:rgba(6,4,3,.72);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);animation:reqfade .3s both}
+.req-stay{position:absolute;inset:0;z-index:9;display:grid;place-items:center;padding:56px 20px 20px;overflow:auto;border-radius:inherit;background:rgba(6,4,3,.72);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);animation:reqfade .3s both}
 .req-stay[hidden]{display:none}
 .stay-card{position:relative;width:min(540px,100%);padding:64px clamp(22px,4vw,38px) 30px;border-radius:24px;text-align:center;
   background:radial-gradient(ellipse 80% 50% at 50% 0%,rgba(255,138,31,.16),transparent 70%),linear-gradient(180deg,#1b1008,#0b0705);
