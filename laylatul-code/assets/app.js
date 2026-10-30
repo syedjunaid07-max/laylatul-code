@@ -190,10 +190,10 @@ function makeScene() {
 function sizeCanvas() {
   const rc = canvas.getBoundingClientRect();
   if (!rc.width || !rc.height) return;
-  const dpr = LITE ? Math.min(1.2, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);
+  const dpr = LITE ? 1 : Math.min(1.25, devicePixelRatio || 1);   // phones: the hall is soft anyway, so draw it at 1x
   night.W = rc.width; night.H = rc.height;
   canvas.width = Math.round(rc.width * dpr); canvas.height = Math.round(rc.height * dpr);
-  night.ctx = canvas.getContext('2d');
+  night.ctx = night.ctx || canvas.getContext('2d', { alpha: false });   // the hall is always solid, so the browser can skip blending it
   night.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (!night.sky) {
     night.sky = sprite('rgba(255,214,170,.9)', 'rgba(255,110,30,0)');
@@ -286,7 +286,10 @@ function drawHall(ctx, t, vx, vy, F, cz, wide, md) {
     ctx.globalAlpha = a * 0.6; ctx.lineWidth = LW[q] * 1.2; ctx.stroke(post[k]);
     if (!LITE) { ctx.globalAlpha = a * 0.1; ctx.lineWidth = LW[q] * 6; ctx.stroke(post[k]); }
   }
-  for (let i = 0; i < leds.length; i += 4) {
+  if (LITE) {   // phones: plain dots, far cheaper than a glow image per light
+    ctx.fillStyle = '#ffc061';
+    for (let i = 0; i < leds.length; i += 4) { const s = Math.max(1, leds[i + 2] * 0.45); ctx.globalAlpha = leds[i + 3]; ctx.fillRect(leds[i] - s / 2, leds[i + 1] - s / 2, s, s); }
+  } else for (let i = 0; i < leds.length; i += 4) {
     const s = leds[i + 2]; ctx.globalAlpha = leds[i + 3];
     ctx.drawImage(night.gold, leds[i] - s, leds[i + 1] - s, s * 2, s * 2);
   }
@@ -473,7 +476,8 @@ function tick(now) {
   updateHud(jp(shown), now);
   const ambient = !videoReady && heroOnScreen && !document.hidden;
   const idleGap = LITE ? 32 : transitAt(shown) > 0.05 ? 0 : 33;
-  if (!videoReady && ((moving && !LITE) || now - lastDraw >= idleGap)) { drawNight(jp(shown), now / 1000); lastDraw = now; }
+  if (!videoReady && !reqOn && ((moving && !LITE) || now - lastDraw >= idleGap))   // nothing to draw while the request window covers it
+    { drawNight(jp(shown), now / 1000); lastDraw = now; }
   if (scrubOn && heroOnScreen && (moving || loadK < 1 || ambient)) rafId = requestAnimationFrame(tick);
   else lastTick = 0;
 }
@@ -779,7 +783,7 @@ const orb = { x: innerWidth * 0.72, y: innerHeight * 0.47, vx: 0, vy: 0, R: 40, 
   orb.arcs = [[1.08, 1.6, 0.18, 1], [1.16, 0.9, -0.3, 0.6], [1.24, 2.1, 0.1, 0.8], [1.0, 0.7, -0.45, 1.2]].map(([rr, span, w, k], i) => ({ rr, span, w, k, s: i * 1.7 }));
 })();
 function sizeOrb() {
-  const dpr = LITE ? Math.min(1.6, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);   // the orb is the star on phones: keep it crisp
+  const dpr = LITE ? Math.min(1.3, devicePixelRatio || 1) : Math.min(1.25, devicePixelRatio || 1);
   orb.W = stage.clientWidth || innerWidth; orb.H = stage.clientHeight || innerHeight;
   orbCv.width = Math.round(orb.W * dpr); orbCv.height = Math.round(orb.H * dpr);
   oc.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -902,7 +906,7 @@ orbImg.decode().then(() => {
 
 /* energy streams: fine filaments curve in from the darkness, wrap around the orb and merge into its shell or its core;
    a few motes of light ride them in, and soft glints mark where they are absorbed */
-const feed = { lanes: [], n: LITE ? 70 : 130, glow: 0, glints: [], motes: [], boost: 1 };
+const feed = { lanes: [], n: LITE ? 44 : 130, glow: 0, glints: [], motes: [], boost: 1 };
 const glint = document.createElement('canvas');   // one soft dot of light, reused for every particle
 glint.width = glint.height = 32;
 (() => {
@@ -913,7 +917,7 @@ glint.width = glint.height = 32;
   const dirs = [-2.5, -1.45, -0.55, 0.35, 1.2, 2.0, 2.85, 3.6];   // roughly even around the orb, a little irregular
   feed.lanes = dirs.map((a, i) => ({ a: a + (r() - 0.5) * 0.25, wrap: 1.1 + r() * 0.8, spread: 0.12 + r() * 0.08, len: 0.85 + r() * 0.3, ph: r() * TAU,
     end: i % 4 === 1 ? 0.14 : 0.8 + r() * 0.12,   // two bundles dive into the core, the rest merge into the outer shell
-    strands: Array.from({ length: LITE ? 3 : 5 }, () => ({ off: (r() - 0.5) * 2, ph: r() * TAU })) }));
+    strands: Array.from({ length: LITE ? 2 : 5 }, () => ({ off: (r() - 0.5) * 2, ph: r() * TAU })) }));
   const n = feed.n;
   feed.lane = new Uint8Array(n); feed.u = new Float32Array(n); feed.off = new Float32Array(n); feed.sp = new Float32Array(n); feed.s = new Float32Array(n);
   for (let i = 0; i < n; i++) { feed.lane[i] = (r() * dirs.length) | 0; feed.u[i] = r(); feed.off[i] = (r() - 0.5) * 2; feed.sp[i] = 0.75 + r() * 0.5; feed.s[i] = 0.6 + r() * 0.8; }
@@ -1210,7 +1214,7 @@ function stepOrb(now) {
   for (const s of orb.sparks) { s.x += s.vx * k; s.y += s.vy * k; s.vy += 0.09 * k; s.vx *= Math.pow(0.99, k); s.life -= 0.022 * k; }
   orb.sparks = orb.sparks.filter(s => s.life > 0 && s.y < orb.H + 20);
   if (orb.R > 6) stepFeed(dt, k);
-  if (now - (orb.lastDraw || 0) >= 32) { renderOrb(t); orb.lastDraw = now; }   // 30 redraws a second is plenty for a hologram
+  if (!reqOn && now - (orb.lastDraw || 0) >= 32) { renderOrb(t); orb.lastDraw = now; }   // 30 redraws a second is plenty for a hologram
   if (!document.hidden && !RM.matches) orb.raf = requestAnimationFrame(stepOrb);
 }
 function orbStill() {   // reduced motion: the orb sits still at its spot, redrawn only when the page moves
@@ -1351,7 +1355,7 @@ function stepTech(now) {
   tech.mix += ((inHero ? 0.45 : 1) - tech.mix) * (1 - Math.pow(0.92, k));
   tech.frame = (tech.frame || 0) + 1;
   if (LITE && inHero) { if (!tech.cleared) { tc.clearRect(0, 0, tech.W, tech.H); tech.cleared = true; } }
-  else if ((!LITE && !inHero) || tech.frame % 2 === 0) { tech.cleared = false; drawTech(now / 1000, k * (LITE || inHero ? 2 : 1)); }   // half rate on phones and behind the hero
+  else if (!reqOn && ((!LITE && !inHero) || tech.frame % 2 === 0)) { tech.cleared = false; drawTech(now / 1000, k * (LITE || inHero ? 2 : 1)); }   // half rate on phones and behind the hero
   if (!document.hidden && !RM.matches) tech.raf = requestAnimationFrame(stepTech);
 }
 function wakeTech() {
@@ -1542,7 +1546,7 @@ $$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDe
 const rail = $('.rail'), railFill = $('.rail-fill'), railOrb = $('.rail-orb'), railTip = $('.rail-tip'), orbBtn = $('.orb-btn'), finalSec = $('.final');
 let railLastY = scrollY, railTouch = false, railTick = false, railH = 0, finalTop = 0, btnUp = null, btnGlide = null, railIdle = 0, railName = '';
 // the section names the line shows while you drag it
-const RAIL_NAMES = [['#problem', 'Heard this before?'], ['#promises', 'Our promises'], ['#types', 'What we build'], ['#how', 'How it works'], ['#prices', 'Prices'], ['#build', 'Your request'], ['#faq', 'FAQ'], ['.final', "Let's start"]];
+const RAIL_NAMES = [['#problem', 'Heard this before?'], ['#promises', 'Our promises'], ['#types', 'What we build'], ['#work', 'Our work'], ['#how', 'How it works'], ['#prices', 'Prices'], ['#build', 'Your request'], ['#faq', 'FAQ'], ['.final', "Let's start"]];
 let railSecs = [];
 function railLabel() { let n = 'Intro'; for (const [t, name] of railSecs) if (scrollY >= t) n = name; return n; }
 const maxScroll = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
@@ -1610,6 +1614,7 @@ rail.addEventListener('pointerdown', e => {
 if (RM.matches) pinToFinalStates();
 applyHeroMode();
 sizeRail();
+if (location.hash === '#build') openReq(null);   // arriving from the About or Privacy page
 sectionDrive();
 navState();
 })();
