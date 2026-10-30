@@ -454,7 +454,7 @@ html.req-open{overflow:hidden}
 .req .bform > :nth-child(4){animation-delay:.58s}
 .req .bform > :nth-child(n+5){animation-delay:.66s}
 .req .blueprint{animation-delay:.45s}
-.req-x{position:absolute;top:16px;right:16px;z-index:3;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,138,31,.45);background:rgba(12,8,6,.85);display:grid;place-items:center;cursor:pointer;transition:rotate .35s var(--ease-out),background .3s,box-shadow .3s}
+.req-x{position:absolute;top:16px;right:16px;z-index:8;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,138,31,.45);background:rgba(12,8,6,.85);display:grid;place-items:center;cursor:pointer;transition:rotate .35s var(--ease-out),background .3s,box-shadow .3s}
 .req-x svg{width:20px;height:20px;fill:none;stroke:#ffe2bf;stroke-width:2.2;stroke-linecap:round}
 .req-x:hover{rotate:90deg;background:rgba(255,138,31,.18);box-shadow:0 0 22px rgba(255,138,31,.45)}
 .req-x:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
@@ -529,3 +529,72 @@ html.req-open{overflow:hidden}
 .prose a{color:var(--accent);text-underline-offset:3px}
 .prose strong{color:var(--text-primary)}
 .page-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:clamp(40px,6vw,64px)}
+
+/* ---------- phones: less scrolling. Two cards side by side, tighter sections ---------- */
+@media (max-width:620px){
+  section{padding-top:64px;padding-bottom:64px}
+  .sec-head{margin-bottom:28px}
+  /* our promises: a 2 x 2 grid of small cards */
+  .promise-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .promise-list li,.promise-list li:last-child{display:block;padding:16px 14px;border:1px solid var(--line);border-radius:16px;background:rgba(22,14,9,.6)}
+  .promise-list .num{display:block;font-size:12px;margin-bottom:10px}
+  .promise-list h3{font-size:15px;line-height:1.25;margin-bottom:6px}
+  .promise-list p{font-size:12.5px;line-height:1.5}
+  /* what we build */
+  .type-grid{gap:10px}
+  .type{padding:14px 12px;gap:4px}
+  .type svg{width:30px;height:30px;margin-bottom:6px}
+  .type b{font-size:14px}
+  .type span{font-size:12px}
+  /* our work: two per row */
+  .work-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .work-card{border-radius:16px}
+  .work-shot{margin:8px 8px 0;border-radius:8px 8px 3px 3px}
+  .work-shot::before{height:12px;background:radial-gradient(circle at 8px 6px,#ff8a1f 2px,transparent 2.6px),radial-gradient(circle at 15px 6px,rgba(255,179,71,.7) 2px,transparent 2.6px),radial-gradient(circle at 22px 6px,rgba(255,210,122,.5) 2px,transparent 2.6px),#140d08}
+  .work-info{padding:12px 11px 14px;gap:5px}
+  .work-tag{font-size:9.5px;letter-spacing:.08em}
+  .work-info h3{font-size:14.5px;line-height:1.2}
+  .work-info p{font-size:12px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .work-url{font-size:10px;overflow-wrap:anywhere}
+  .work-card:last-child:nth-child(odd){grid-column:1 / -1}
+  /* how it works: two per row */
+  .steps ol{grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 14px}
+  .step-art{width:76px;height:76px;margin-bottom:12px}
+  .step-art svg{width:40px;height:40px}
+  .steps .num{margin-bottom:8px}
+  .steps h3{font-size:15.5px;margin-bottom:6px}
+  .steps p{font-size:12.5px;line-height:1.5}
+  /* prices: two per row, the third across the bottom */
+  .plans{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:none}
+  .plan{padding:24px 13px 14px;border-radius:18px}
+  .plan .tag{left:12px;top:-11px;font-size:9.5px;padding:5px 8px;letter-spacing:.04em}
+  .plan h3{font-size:17px}
+  .price{font-size:23px;margin:12px 0 8px}
+  .price small{font-size:10.5px;margin-bottom:5px}
+  .fit{font-size:12px;min-height:0}
+  .plan ul{margin:12px 0 14px;gap:7px;font-size:12px}
+  .plan li{gap:7px}
+  .plan li::before{width:5px;height:5px}
+  .plan .btn{padding:11px 10px;font-size:13px}
+  .plan:last-child:nth-child(odd){grid-column:1 / -1}
+  /* the request form: smaller chips, details two per row */
+  .bform fieldset{margin-bottom:24px}
+  .chips{gap:8px}
+  .chips span{min-height:38px;padding:7px 13px;font-size:14px}
+  .two{grid-template-columns:1fr 1fr;gap:10px}
+  .field{font-size:13px}
+  .field input,.field select,.field textarea{padding:11px 12px;font-size:15px}
+}
+
+/* ---------- the live sketch stays pinned at the top of the form on tablets and phones ---------- */
+@media (max-width:960px){
+  .blueprint{position:sticky;top:96px;z-index:5;order:-1;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto;gap:6px 14px;align-items:center;padding:10px 14px 10px 10px;border-radius:16px;background:#100b08;box-shadow:0 0 0 1px var(--line),0 12px 30px rgba(0,0,0,.55)}
+  .blueprint #bp{grid-column:1;grid-row:1 / span 2;width:150px}
+  .blueprint #bp g{stroke-width:2.6}
+  .bp-label{grid-column:2;grid-row:1;flex-direction:column;gap:6px;margin:0;align-self:end}
+  .bp-note{grid-column:2;grid-row:2;margin:0;text-align:left;font-size:12px;align-self:start}
+  .req .blueprint{position:sticky;top:-19px;padding-right:58px}   /* inside the request window: pinned under the close button's reach */
+  .blueprint.ping{animation:bpping .7s var(--ease-out)}
+}
+@keyframes bpping{30%{box-shadow:0 0 0 1px rgba(255,138,31,.9),0 0 26px rgba(255,138,31,.5),0 12px 30px rgba(0,0,0,.55)}}
+@media (prefers-reduced-motion:reduce){.blueprint.ping{animation:none}}

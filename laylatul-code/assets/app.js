@@ -621,7 +621,11 @@ function renderBlueprint() {
   feats.forEach(f => on.add(featMap[f]));
   $$('#bp .grp').forEach(g => g.classList.toggle('on', [...g.classList].some(c => on.has(c))));
   $('#bp-title').textContent = type ? type.toLowerCase().replace(/[^a-z]+/g, '-').replace(/-$/, '') : 'your-website';
-  $('#bp-count').textContent = on.size + (on.size === 1 ? ' part' : ' parts');
+  const cnt = on.size + (on.size === 1 ? ' part' : ' parts'), bpc = $('#bp-count');
+  if (bpc.textContent !== cnt) {   // a quick glow on the sketch each time it changes, so you notice it even when it's small
+    bpc.textContent = cnt;
+    const bpEl = $('.blueprint'); bpEl.classList.remove('ping'); void bpEl.offsetWidth; bpEl.classList.add('ping');
+  }
 }
 form.addEventListener('input', () => { renderBlueprint(); if (err.textContent) err.textContent = ''; });
 renderBlueprint();
