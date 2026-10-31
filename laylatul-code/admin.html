@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project admin | laylatul-code</title>
+<meta name="description" content="laylatul-code project admin.">
+<meta name="theme-color" content="#09070A">
+<!-- DEPLOY STEP: og:url points at the GitHub Pages demo; change it when the site moves to its own domain. Add og:image once a share image exists. -->
+<meta property="og:title" content="Project admin | laylatul-code">
+<meta property="og:description" content="laylatul-code project admin.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://syedjunaid07-max.github.io/laylatul-code/admin.html">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2309070A'/%3E%3Cpath d='M40 12a22 22 0 1 0 12 36A18 18 0 1 1 40 12z' fill='%23FF8A1F'/%3E%3Cpath d='M34 22l-6 20' stroke='%23FFF3E6' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=dev">
+<meta name="robots" content="noindex, nofollow"></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="env" aria-hidden="true"><div class="stars s1"></div><div class="stars s2"></div><div class="glow"></div></div>
+
+<nav class="nav solid" aria-label="Main">
+  <a class="brand" href="./" aria-label="laylatul-code home">
+    <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M40 12a22 22 0 1 0 12 36A18 18 0 1 1 40 12z" fill="currentColor"/><path d="M34 22l-6 20" stroke="var(--text-primary)" stroke-width="4" stroke-linecap="round"/></svg>
+    <span>laylatul-code</span>
+  </a>
+  <div class="nav-links">
+    <a href="./#types">What we build</a>
+    <a href="./#work">Our work</a>
+    <a href="./#how">How it works</a>
+    <a href="./#prices">Prices</a>
+    <a href="./#faq">FAQ</a>
+    <a href="about.html">About</a>
+  </div>
+  <a class="btn btn-sm" href="./#build">Start your request</a>
+</nav>
+
+<main id="main" class="page admin" tabindex="-1">
+  <p class="label">Team only</p>
+
+  <section id="a-login" aria-labelledby="login-h" hidden>
+    <h1 id="login-h">Project admin.</h1>
+    <p class="lede">Sign in with your Supabase admin account.</p>
+    <form id="login-form" class="gate-form" novalidate>
+      <label class="field"><span>Email</span><input id="a-email" type="email" autocomplete="username" required></label>
+      <label class="field"><span>Password</span><input id="a-pass" type="password" autocomplete="current-password" required></label>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+    <p class="err" id="login-err" role="alert"></p>
+  </section>
+
+  <div id="a-app" hidden>
+    <div class="a-top">
+      <h1>Projects</h1>
+      <div class="a-top-actions"><span class="mono small" id="a-who"></span><button class="btn btn-ghost btn-sm" id="a-out" type="button">Sign out</button></div>
+    </div>
+
+    <div class="a-layout">
+      <aside class="a-side">
+        <details class="p-card a-new">
+          <summary class="btn btn-sm">+ New project</summary>
+          <form id="new-form" class="a-form" novalidate>
+            <label class="field"><span>Client name</span><input name="client" required></label>
+            <label class="field"><span>Project title</span><input name="title" placeholder="e.g. Sharma Dental website" required></label>
+            <label class="field"><span>Preview link (optional)</span><input name="preview" type="url" placeholder="https://"></label>
+            <label class="field"><span>Launch date (optional)</span><input name="due" type="date"></label>
+            <button class="btn" type="submit">Create project</button>
+            <p class="err" id="new-err" role="alert"></p>
+          </form>
+        </details>
+        <div id="a-created" class="p-card a-created" hidden>
+          <h2>Send this to your client</h2>
+          <p>The code is shown only once. Send the link and the code in separate messages if you can.</p>
+          <label class="field"><span>Link</span><input id="c-link" readonly></label>
+          <label class="field"><span>Access code</span><input id="c-code" readonly></label>
+          <button class="btn btn-sm" type="button" id="c-copy">Copy both</button>
+        </div>
+        <ul id="a-list" class="a-list"></ul>
+      </aside>
+
+      <section id="a-detail" class="a-detail" aria-live="polite">
+        <p class="a-hint">Choose a project, or create a new one.</p>
+      </section>
+    </div>
+  </div>
+  <p class="err" id="a-err" role="alert"></p>
+</main>
+
+<footer class="foot">
+  <div class="foot-brand"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M40 12a22 22 0 1 0 12 36A18 18 0 1 1 40 12z" fill="currentColor"/><path d="M34 22l-6 20" stroke="var(--text-primary)" stroke-width="4" stroke-linecap="round"/></svg><span>laylatul-code</span></div>
+  <div class="foot-links">
+    <a href="mailto:abus76416@gmail.com">abus76416@gmail.com</a>
+    <a href="./#build">WhatsApp</a>
+    <a href="about.html">About</a>
+    <a href="privacy.html">Privacy</a>
+  </div>
+  <p class="mono small">&copy; <span id="yr">2026</span> laylatul-code. Any website you can picture.</p>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/config.js?v=dev"></script>
+<script src="assets/admin.js?v=dev"></script>
+<script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+</body>
+</html>

@@ -41,8 +41,8 @@
 <main id="main" class="page" tabindex="-1">
   <p class="label">Privacy</p>
   <h1>Privacy policy</h1>
-  <p class="lede">The short version: this website has no accounts, no tracking and no cookies. We only see what you choose to send us, and we use it to reply to you and build your website.</p>
-  <p class="updated mono">Last updated: 30 October 2026</p>
+  <p class="lede">The short version: this website has no tracking, no advertising and no cookies. We only see what you choose to send us, and we use it to reply to you and build your website.</p>
+  <p class="updated mono">Last updated: 31 October 2026</p>
 
   <div class="prose">
     <h2>Who we are</h2>
@@ -50,7 +50,9 @@
 
     <h2>What we collect</h2>
     <p>When you use the request form, you can give us your name, business name, phone or WhatsApp number, city, the kind of website and features you want, your budget, your timing, and any notes. The form doesn't send anything to us by itself: it writes your request into a message and opens WhatsApp or your email app. <strong>We only receive it if you press send there.</strong> When you send it, we also see your WhatsApp number or email address.</p>
-    <p>We don't use analytics, advertising trackers or cookies on this website, and we don't keep anything in your browser.</p>
+    <p>If you're our client, your project page holds your project's details, progress and preview link, and the messages, tickets and comments you and we write there.</p>
+    <p>If you use the "Ask us" assistant, the questions you type are sent to an AI service to write the answers. Please don't type personal or sensitive information into it.</p>
+    <p>We don't use analytics, advertising trackers or cookies. Your project page remembers your access code only until you close that browser tab.</p>
 
     <h2>How we use it</h2>
     <ul>
@@ -63,8 +65,10 @@
     <h2>Who else handles it</h2>
     <ul>
       <li><strong>WhatsApp or your email provider</strong> carries your message to us when you send it, under their own privacy policies.</li>
-      <li><strong>GitHub Pages</strong> hosts this website and may record technical details, such as your IP address, to deliver the pages and keep them secure.</li>
+      <li><strong>Our hosting</strong> (our own server, and GitHub Pages for a demo copy) delivers this website and may record technical details, such as your IP address, to deliver the pages and keep them secure.</li>
       <li><strong>Google Fonts</strong> supplies the website's fonts, so your browser connects to Google to download them.</li>
+      <li><strong>Supabase</strong> stores client project pages, messages, tickets and comments, and runs the assistant.</li>
+      <li><strong>Google Gemini</strong> writes the assistant's answers from the questions you type. Google handles them under its own terms, which for free use can include using them to improve its services.</li>
     </ul>
 
     <h2>How long we keep it</h2>
@@ -94,5 +98,7 @@
   <p class="mono small">&copy; <span id="yr">2026</span> laylatul-code. Any website you can picture.</p>
 </footer>
 <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+<script src="assets/config.js?v=dev"></script>
+<script src="assets/assistant.js?v=dev" defer></script>
 </body>
 </html>

@@ -73,3 +73,27 @@ The site is static and lives in two places:
 - **GitHub Pages (demo):** https://syedjunaid07-max.github.io/laylatul-code/ publishes automatically on every push to `main`.
 
 When a domain points at the server, put it in `server_name` in the nginx file and add free HTTPS with certbot.
+
+## Client project pages and the "Ask us" assistant
+
+- `track.html#p=<id>`: the client's page. They enter a 6-digit code, then see progress, steps and the preview link, and can send messages, raise tickets and comment. Code in `assets/portal.js`.
+- `admin.html`: the owner's page (not linked from the site, hidden from search engines). Sign in, create projects (it shows the client's link and code once), update stage, progress, preview link and steps, reply, and close tickets. Code in `assets/admin.js`.
+- The "Ask us" bubble (`assets/assistant.js`) on the public pages asks the Supabase function `supabase/functions/assistant`, which answers with Google Gemini. Its facts (prices, timing, promises) are written in that function: **update them there when the website changes.**
+- Settings live in `assets/config.js` (Supabase URL and anon key, both public). The Gemini key is a Supabase secret and never goes in the website code.
+
+### One-time setup
+
+1. Create a free account at supabase.com and a new project.
+2. **SQL Editor > New query:** paste all of `supabase/schema.sql` and run it.
+3. **Authentication > Users > Add user:** your email and a strong password. Then in the SQL Editor run `insert into public.admins(email) values ('your@email');`.
+4. **Project Settings > API:** copy the Project URL and the anon / publishable key into `assets/config.js`.
+5. Get a Gemini API key at aistudio.google.com. In Supabase, **Edge Functions > Secrets**, add `GEMINI_API_KEY` with it.
+6. Deploy the function from this folder (it opens a browser to sign you in to Supabase):
+
+   ```bash
+   npx supabase login
+   npx supabase functions deploy assistant --project-ref <your-project-ref>
+   ```
+
+7. Publish the website (`./deploy/deploy.sh`, and push for GitHub Pages).
+
