@@ -598,3 +598,19 @@ html.req-open{overflow:hidden}
 }
 @keyframes bpping{30%{box-shadow:0 0 0 1px rgba(255,138,31,.9),0 0 26px rgba(255,138,31,.5),0 12px 30px rgba(0,0,0,.55)}}
 @media (prefers-reduced-motion:reduce){.blueprint.ping{animation:none}}
+
+/* no blue flash when tapping buttons on Android (our buttons have their own pressed states) */
+html{-webkit-tap-highlight-color:transparent}
+a,button,label,summary,input,select,textarea{-webkit-tap-highlight-color:transparent}
+
+/* phones: the request window keeps still and drops its running edge light, so scrolling inside it stays smooth */
+@media (pointer:coarse),(max-width:720px){
+  .req-panel::before{animation:none;display:none}
+  .req-panel.settled{animation:none}
+  .req-panel{box-shadow:0 0 0 1px rgba(255,138,31,.4),0 30px 80px rgba(0,0,0,.7)}
+  .req-body{-webkit-overflow-scrolling:touch}
+}
+/* a small press-down instead, so taps still feel answered */
+.btn:active,.type:active,.work-card:active,.req-x:active,.orb-btn:active{scale:.97}
+.chips label:active span{scale:.95}
+.chips span{transition:background .3s var(--ease-out),color .3s,border-color .3s,box-shadow .3s,scale .15s}
