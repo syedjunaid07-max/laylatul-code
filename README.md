@@ -61,4 +61,15 @@ Then open http://localhost:8080 in Chrome. Double-clicking `index.html` also wor
 
 ## Deploying
 
-The site is static. To publish, upload the **contents** of the `laylatul-code` folder (`index.html` and `assets/`) to any static host, not the folder itself.
+The site is static and lives in two places:
+
+- **Our server (main):** http://103.205.144.18, an Ubuntu 22.04 Matrix Streamline VPS running nginx. Publish from a clean, committed checkout with:
+
+  ```bash
+  ./deploy/deploy.sh
+  ```
+
+  It stamps the CSS/JS links with the current commit, uploads the site, swaps it in place (the previous copy stays on the server as `/var/www/laylatul-code.old`) and reloads nginx with `deploy/nginx-laylatul-code.conf`. It needs SSH access as root with `~/.ssh/matrix_server_ed25519`; use `SSH_KEY=... ./deploy/deploy.sh user@host` for another key or server.
+- **GitHub Pages (demo):** https://syedjunaid07-max.github.io/laylatul-code/ publishes automatically on every push to `main`.
+
+When a domain points at the server, put it in `server_name` in the nginx file and add free HTTPS with certbot.
