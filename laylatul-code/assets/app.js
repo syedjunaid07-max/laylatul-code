@@ -1018,28 +1018,61 @@ function drawFeedFlashes(c, x, y, R, t) {   // a soft glint where each stream is
 
 function drawOrbArt(c, x, y, R, t, ex) {
   const r = R * 1.08 * (1 + 0.018 * Math.sin(t * 1.9) + 0.04 * ex);   // gentle breathing
-  const rot = orb.scrollRot, spin = orb.spin;
-  c.globalCompositeOperation = 'lighter';
+  const rot = orb.scrollRot, spin = orb.spin, sv = Math.min(1, Math.abs(orb.svs || 0) * 1.4);
+  orb.swing = (orb.swing || 0) + (sv - (orb.swing || 0)) * 0.06;   // how hard the rings are swinging: eases up while you scroll, settles after
+  const sw = orb.swing, pulse = 0.5 + 0.5 * Math.sin(t * 2.6), fed = feed.glow;
+
   // soft golden haze behind it
+  c.globalCompositeOperation = 'lighter';
   const gR = r * 1.9;
   let g = c.createRadialGradient(x, y, r * 0.2, x, y, gR);
   g.addColorStop(0, `rgba(255,150,40,${0.16 + 0.08 * ex})`); g.addColorStop(1, 'rgba(255,110,20,0)');
   c.globalAlpha = 1; c.fillStyle = g; c.fillRect(x - gR, y - gR, gR * 2, gR * 2);
-  // the three rings: core and shell turn one way, the middle turns the other; all speed up while you scroll
+
+  // the body: a dark glass sphere, so the rings read as wrapped round something solid
+  c.globalCompositeOperation = 'source-over';
+  const br = r * 0.66;
+  g = c.createRadialGradient(x - br * 0.3, y - br * 0.35, br * 0.05, x, y, br);
+  g.addColorStop(0, 'rgba(70,30,8,0.42)'); g.addColorStop(0.55, 'rgba(22,9,3,0.5)'); g.addColorStop(1, 'rgba(6,3,1,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, br, 0, TAU); c.fill();
+  c.globalCompositeOperation = 'lighter';
+
+  // the three rings, each on its own tilted axis like a gyroscope. At rest they lie almost flat to you (so the orb
+  // looks like the artwork); as you scroll they swing over, and each axis slowly turns
+  const tilt = [0.1 + 0.5 * sw, 0.22 + 0.16 * Math.sin(t * 0.5) + 0.85 * sw, 0.3 + 0.18 * Math.sin(t * 0.37 + 2) + 1.0 * sw];
+  const axis = [t * 0.11 + rot * 0.6, 1.1 - t * 0.07 - rot * 0.45, 2.4 + t * 0.05 + rot * 0.3];
   const angles = [spin * 1.7 + rot * 0.9 + t * 0.18, -spin * 0.9 - rot * 0.5 - t * 0.09, spin * 0.45 + rot * 0.3 + t * 0.04];
   const flicker = 0.93 + 0.07 * Math.sin(t * 3.3);
-  orb.layers.forEach((cv, i) => {
-    c.save(); c.translate(x, y); c.rotate(angles[i]);
-    c.globalAlpha = flicker;
-    c.drawImage(cv, -r, -r, r * 2, r * 2);
+  for (let i = 2; i >= 0; i--) {   // outer shell first, core last
+    const k = Math.max(0.16, Math.cos(tilt[i]));
+    c.save(); c.translate(x, y); c.rotate(axis[i]); c.scale(1, k); c.rotate(angles[i] - axis[i]);
+    c.globalAlpha = flicker * (0.82 + 0.18 * k);   // a ring seen edge-on is a little dimmer
+    c.drawImage(orb.layers[i], -r, -r, r * 2, r * 2);
     c.restore();
-  });
-  // the core pulses
-  const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
-  g = c.createRadialGradient(x, y, 0, x, y, r * (0.22 + 0.08 * feed.glow));
-  const fed = feed.glow;
+  }
+
+  // light on the sphere: a rim glow round its edge and a soft highlight up and to the left
+  g = c.createRadialGradient(x, y, br * 0.72, x, y, br * 1.04);
+  g.addColorStop(0, 'rgba(255,150,50,0)'); g.addColorStop(0.8, `rgba(255,170,70,${0.2 + 0.12 * sw})`); g.addColorStop(1, 'rgba(255,150,50,0)');
+  c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, br * 1.04, 0, TAU); c.fill();
+  c.save(); c.translate(x - br * 0.34, y - br * 0.42); c.rotate(-0.6); c.scale(1, 0.55);
+  g = c.createRadialGradient(0, 0, 0, 0, 0, br * 0.42);
+  g.addColorStop(0, 'rgba(255,244,220,0.26)'); g.addColorStop(1, 'rgba(255,220,170,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(0, 0, br * 0.42, 0, TAU); c.fill(); c.restore();
+
+  // the core pulses, brighter as it takes energy in
+  g = c.createRadialGradient(x, y, 0, x, y, r * (0.22 + 0.08 * fed));
   g.addColorStop(0, `rgba(255,240,190,${Math.min(1, 0.3 + 0.3 * pulse + 0.5 * fed)})`); g.addColorStop(0.5, `rgba(255,170,60,${0.12 + 0.12 * pulse + 0.25 * fed})`); g.addColorStop(1, 'rgba(255,140,30,0)');
-  c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.3, 0, TAU); c.fill();
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.3, 0, TAU); c.fill();
+
+  // a lens flare: a thin streak of light through the core, longer while it moves
+  const fl = r * (1.5 + 0.9 * sw), fa = 0.1 + 0.1 * pulse + 0.25 * fed + 0.2 * sw;
+  g = c.createLinearGradient(x - fl, 0, x + fl, 0);
+  g.addColorStop(0, 'rgba(255,170,70,0)'); g.addColorStop(0.5, `rgba(255,232,190,${Math.min(0.75, fa)})`); g.addColorStop(1, 'rgba(255,170,70,0)');
+  c.fillStyle = g; c.fillRect(x - fl, y - Math.max(1, r * 0.008), fl * 2, Math.max(2, r * 0.016));
+  g = c.createLinearGradient(x - fl * 0.5, 0, x + fl * 0.5, 0);
+  g.addColorStop(0, 'rgba(255,170,70,0)'); g.addColorStop(0.5, `rgba(255,200,120,${Math.min(0.3, fa * 0.5)})`); g.addColorStop(1, 'rgba(255,170,70,0)');
+  c.fillStyle = g; c.fillRect(x - fl * 0.5, y - r * 0.035, fl, r * 0.07);
 }
 
 function drawOrb(c, x, y, R, t, ex, big) {
@@ -1545,6 +1578,41 @@ function startGlide() {
 $$('[data-explore]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); startGlide(); }));
 
 /* ---------- go ---------- */
+/* ---------- depth: sections swing up into place as they scroll in, and cards lean toward the mouse ---------- */
+const RISE_SEL = '.sec-head, .promises-head, .promise-list li, .work-card, .steps li, .plan, .faq-list details, .final > *';
+const riseIO = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return;
+  const el = e.target; riseIO.unobserve(el);
+  el.classList.add('in');
+  setTimeout(() => el.classList.remove('rise', 'in'), 1500);   // hand the element back to its normal styles
+}), { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+if (!RM.matches) $$(RISE_SEL).forEach(el => {
+  if (el.getBoundingClientRect().top < innerHeight) return;   // already on screen: leave it be
+  const sibs = [...el.parentNode.children].filter(n => n.matches(RISE_SEL));
+  el.style.setProperty('--rise-d', Math.min(sibs.indexOf(el), 6) * 70 + 'ms');   // neighbours follow one another
+  el.classList.add('rise'); riseIO.observe(el);
+});
+
+// with a mouse, cards tilt toward the pointer and a soft light follows it across them
+if (matchMedia('(pointer: fine) and (hover: hover)').matches && !RM.matches) {
+  $$('.type, .plan, .work-card, .promise-list li, .step-art, .fact, .blueprint').forEach(el => {
+    const glare = document.createElement('i'); glare.className = 'glare'; glare.setAttribute('aria-hidden', 'true');
+    el.appendChild(glare); el.classList.add('tilt');
+    let raf = 0, px = 0, py = 0;
+    const apply = () => {
+      raf = 0;
+      const b = el.getBoundingClientRect(), nx = (px - b.left) / b.width, ny = (py - b.top) / b.height;
+      el.style.setProperty('--ry', ((nx - 0.5) * 12).toFixed(2) + 'deg');
+      el.style.setProperty('--rx', ((0.5 - ny) * 10).toFixed(2) + 'deg');
+      el.style.setProperty('--mx', (nx * 100).toFixed(1) + '%');
+      el.style.setProperty('--my', (ny * 100).toFixed(1) + '%');
+    };
+    el.addEventListener('pointerenter', () => el.classList.add('tilt-on'));
+    el.addEventListener('pointermove', e => { px = e.clientX; py = e.clientY; if (!raf) raf = requestAnimationFrame(apply); });
+    el.addEventListener('pointerleave', () => { el.classList.remove('tilt-on'); el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg'); });
+  });
+}
+
 /* ---------- the scroll line and the orb button ---------- */
 // a glowing line on the right edge (with a small orb riding it) replaces the browser's scrollbar; the orb button glides to the next section
 const rail = $('.rail'), railFill = $('.rail-fill'), railOrb = $('.rail-orb'), railTip = $('.rail-tip'), orbBtn = $('.orb-btn'), finalSec = $('.final');
